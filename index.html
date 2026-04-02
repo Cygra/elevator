@@ -1,0 +1,1891 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>电梯调度算法可视化模拟器</title>
+  <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080818;
+      --bg2: #0d0d22;
+      --bg3: #12122e;
+      --panel: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --text: #e2e2f0;
+      --text-dim: #7070a0;
+      --accent: #4fc3f7;
+      --accent2: #7c4dff;
+      --green: #00e676;
+      --red: #ff5252;
+      --yellow: #ffea00;
+      --orange: #ff9100;
+      --floor-h: 54px;
+      --shaft-w: 88px;
+      --car-w: 72px;
+      --car-h: 46px;
+      --radius: 8px;
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== Scrollbar ===== */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+    /* ===== Header ===== */
+    #app-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 18px;
+      background: linear-gradient(90deg, #0d0d30 0%, #120d28 100%);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #app-header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      white-space: nowrap;
+      margin-right: 4px;
+    }
+    .header-divider { width: 1px; height: 24px; background: var(--border); }
+    .header-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ctrl-label { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+
+    /* ===== Buttons ===== */
+    .btn {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+    .btn.primary { background: linear-gradient(135deg, #1a6bcc, #4fc3f7); border-color: #4fc3f7; color: #fff; }
+    .btn.primary:hover { filter: brightness(1.15); }
+    .btn.danger { background: linear-gradient(135deg, #8b0000, #ff5252); border-color: #ff5252; color: #fff; }
+    .btn.success { background: linear-gradient(135deg, #00600f, #00e676); border-color: #00e676; color: #000; }
+    .btn.success:hover { filter: brightness(1.1); }
+    .btn[disabled] { opacity: 0.4; cursor: default; }
+    .btn-sm { padding: 3px 9px; font-size: 11px; }
+
+    /* ===== Selects & Inputs ===== */
+    select, input[type=range], input[type=number] {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 5px;
+      padding: 4px 7px;
+      font-size: 12px;
+      outline: none;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+    select option { background: #1a1a3a; }
+    input[type=range] {
+      padding: 0;
+      width: 90px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    input[type=number] { width: 54px; text-align: center; }
+
+    /* ===== Toggle Switch ===== */
+    .toggle-wrap { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .toggle { position: relative; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.12);
+      border-radius: 20px;
+      transition: background 0.2s;
+    }
+    .toggle-slider::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: var(--accent); }
+    .toggle input:checked + .toggle-slider::after { transform: translateX(16px); }
+
+    /* ===== Main Layout ===== */
+    #app-main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ===== Building Section ===== */
+    #building-section {
+      flex: 1;
+      overflow: auto;
+      padding: 16px 20px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    /* ===== Building ===== */
+    #building-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #building {
+      position: relative;
+      display: flex;
+      gap: 0;
+      background: linear-gradient(180deg, #0e0e28 0%, #0a0a1e 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px 12px 4px 4px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(79,195,247,0.08);
+    }
+
+    /* Floor labels column */
+    .floor-labels {
+      width: 38px;
+      display: flex;
+      flex-direction: column-reverse;
+      border-right: 1px solid var(--border);
+    }
+    .floor-label {
+      height: var(--floor-h);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+    .floor-label.ground { color: var(--green); }
+
+    /* Shafts wrapper */
+    #shafts-wrapper {
+      display: flex;
+    }
+
+    /* Individual shaft */
+    .shaft {
+      width: var(--shaft-w);
+      position: relative;
+      border-right: 1px solid rgba(255,255,255,0.04);
+    }
+    .shaft-bg {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        180deg,
+        transparent 0px,
+        transparent calc(var(--floor-h) - 1px),
+        rgba(255,255,255,0.04) calc(var(--floor-h) - 1px),
+        rgba(255,255,255,0.04) var(--floor-h)
+      );
+    }
+    /* Small window decorations on shaft sides */
+    .shaft-bg::before, .shaft-bg::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 8px;
+      background: repeating-linear-gradient(
+        180deg,
+        transparent 0px,
+        transparent calc(var(--floor-h) * 0.2),
+        rgba(79,195,247,0.07) calc(var(--floor-h) * 0.2),
+        rgba(79,195,247,0.07) calc(var(--floor-h) * 0.6),
+        transparent calc(var(--floor-h) * 0.6),
+        transparent var(--floor-h)
+      );
+    }
+    .shaft-bg::before { left: 4px; }
+    .shaft-bg::after { right: 4px; }
+    .shaft-rail {
+      position: absolute;
+      left: 50%;
+      top: 0; bottom: 0;
+      width: 2px;
+      background: rgba(255,255,255,0.07);
+      transform: translateX(-50%);
+    }
+    .shaft-header {
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    /* Elevator car */
+    .elevator-car {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: var(--car-w);
+      height: var(--car-h);
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      transition: bottom 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      cursor: pointer;
+      z-index: 10;
+      overflow: hidden;
+    }
+    .elevator-car::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 5px;
+      border: 1.5px solid currentColor;
+      opacity: 0.7;
+    }
+    .elevator-car::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 5px;
+      background: currentColor;
+      opacity: 0.12;
+    }
+
+    /* Door effect */
+    .elevator-door {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 50%;
+      background: currentColor;
+      opacity: 0;
+      transition: width 0.3s ease, opacity 0.3s ease;
+      z-index: 2;
+    }
+    .elevator-door.left { left: 0; border-radius: 5px 0 0 5px; }
+    .elevator-door.right { right: 0; border-radius: 0 5px 5px 0; }
+    .elevator-car.door-open .elevator-door { width: 0%; opacity: 0.5; }
+
+    .car-id {
+      font-size: 14px;
+      font-weight: 800;
+      color: currentColor;
+      z-index: 5;
+      line-height: 1;
+    }
+    .car-dir {
+      font-size: 16px;
+      z-index: 5;
+      line-height: 1;
+    }
+    .car-passengers {
+      font-size: 10px;
+      z-index: 5;
+      color: rgba(255,255,255,0.7);
+      line-height: 1;
+    }
+    .car-glow {
+      position: absolute;
+      inset: -4px;
+      border-radius: 9px;
+      filter: blur(8px);
+      opacity: 0.35;
+      background: currentColor;
+      z-index: -1;
+    }
+
+    /* Floor buttons (call panel) column */
+    .call-column {
+      width: 56px;
+      display: flex;
+      flex-direction: column-reverse;
+      border-left: 1px solid var(--border);
+    }
+    .call-floor {
+      height: var(--floor-h);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+    .call-btn {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-dim);
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      line-height: 1;
+    }
+    .call-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,195,247,0.1); }
+    .call-btn.active {
+      border-color: var(--yellow);
+      color: var(--yellow);
+      background: rgba(255,234,0,0.2);
+      box-shadow: 0 0 8px rgba(255,234,0,0.4);
+      animation: pulse-btn 1s infinite;
+    }
+    .call-btn.served {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(0,230,118,0.15);
+      box-shadow: 0 0 8px rgba(0,230,118,0.3);
+    }
+    @keyframes pulse-btn {
+      0%,100% { box-shadow: 0 0 8px rgba(255,234,0,0.4); }
+      50% { box-shadow: 0 0 14px rgba(255,234,0,0.8); }
+    }
+
+    /* Waiting passengers column */
+    .pax-column {
+      width: 48px;
+      display: flex;
+      flex-direction: column-reverse;
+      border-right: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .pax-floor {
+      height: var(--floor-h);
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 2px 3px;
+      gap: 2px;
+      flex-wrap: wrap;
+      align-content: center;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .pax-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: opacity 0.3s;
+    }
+    .pax-dot:hover { transform: scale(1.4); }
+    .pax-more {
+      font-size: 8px;
+      color: var(--text-dim);
+      line-height: 1;
+    }
+
+    /* Floor highlight when elevator stops */
+    .floor-active-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: currentColor;
+      opacity: 0.6;
+      animation: fadeFloor 1.5s ease forwards;
+      pointer-events: none;
+      z-index: 20;
+    }
+    @keyframes fadeFloor {
+      0% { opacity: 0.8; }
+      100% { opacity: 0; }
+    }
+
+    /* Shaft headers (elevator labels) */
+    #shaft-headers {
+      display: flex;
+      padding-left: calc(38px + 48px); /* floor-labels + pax-column */
+      padding-right: 56px;
+      margin-bottom: 4px;
+    }
+    .shaft-header-lbl {
+      width: var(--shaft-w);
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+    }
+
+    /* ===== Sidebar ===== */
+    #sidebar {
+      width: 300px;
+      min-width: 260px;
+      flex-shrink: 0;
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg2);
+    }
+    .sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sidebar-tab {
+      flex: 1;
+      padding: 9px 4px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+      letter-spacing: 0.3px;
+    }
+    .sidebar-tab:hover { color: var(--text); }
+    .sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .sidebar-panel { display: none; flex: 1; overflow-y: auto; }
+    .sidebar-panel.active { display: flex; flex-direction: column; }
+
+    /* Cards inside sidebar */
+    .s-card {
+      margin: 10px 10px 0;
+      padding: 10px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .s-card:last-child { margin-bottom: 10px; }
+    .s-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    /* Stats grid */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-item {
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+    .stat-item.green .stat-value { color: var(--green); }
+    .stat-item.yellow .stat-value { color: var(--yellow); }
+    .stat-item.orange .stat-value { color: var(--orange); }
+    .stat-item.red .stat-value { color: var(--red); }
+
+    /* Elevator status cards */
+    .elev-status-card {
+      padding: 9px 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+    .elev-status-card:last-child { margin-bottom: 0; }
+    .elev-status-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .elev-color-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .elev-status-name { font-weight: 700; font-size: 12px; }
+    .elev-status-badge {
+      margin-left: auto;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .badge-idle { background: rgba(112,112,160,0.3); color: var(--text-dim); }
+    .badge-moving { background: rgba(79,195,247,0.2); color: var(--accent); }
+    .badge-open { background: rgba(0,230,118,0.2); color: var(--green); }
+    .elev-status-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      font-size: 11px;
+    }
+    .elev-info-item { color: var(--text-dim); }
+    .elev-info-item span { color: var(--text); font-weight: 600; }
+    .queue-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-top: 5px;
+    }
+    .queue-pill {
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(79,195,247,0.15);
+      border: 1px solid rgba(79,195,247,0.3);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .queue-pill.current {
+      background: rgba(255,234,0,0.2);
+      border-color: rgba(255,234,0,0.5);
+      color: var(--yellow);
+    }
+
+    /* Capacity bar */
+    .cap-bar-wrap {
+      margin-top: 5px;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .cap-bar {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    /* Control panel */
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .ctrl-row:last-child { margin-bottom: 0; }
+    .ctrl-row .ctrl-label { min-width: 60px; }
+    .ctrl-row select, .ctrl-row input { flex: 1; min-width: 0; }
+    .full-btn { width: 100%; margin-bottom: 5px; }
+    .full-btn:last-child { margin-bottom: 0; }
+
+    /* Event log */
+    #event-log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px;
+    }
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 11px;
+      display: flex;
+      gap: 7px;
+      align-items: flex-start;
+    }
+    .log-time { color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .log-msg { color: var(--text); line-height: 1.4; }
+    .log-entry.info .log-msg { color: var(--accent); }
+    .log-entry.success .log-msg { color: var(--green); }
+    .log-entry.warn .log-msg { color: var(--yellow); }
+    .log-entry.error .log-msg { color: var(--red); }
+
+    /* Algorithm info */
+    .algo-desc {
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-top: 6px;
+    }
+
+    /* Performance chart */
+    #perf-chart {
+      width: 100%;
+      height: 80px;
+      margin-top: 6px;
+    }
+
+    /* Time display */
+    #time-display {
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    #sim-status {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .status-running { background: rgba(0,230,118,0.2); color: var(--green); }
+    .status-paused { background: rgba(255,234,0,0.2); color: var(--yellow); }
+    .status-stopped { background: rgba(112,112,160,0.2); color: var(--text-dim); }
+
+    /* Tooltip */
+    [title] { cursor: help; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      #sidebar { width: 240px; min-width: 200px; }
+      :root { --shaft-w: 76px; --car-w: 62px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header id="app-header">
+  <h1>⬆️ 电梯调度模拟器</h1>
+  <div class="header-divider"></div>
+  <div class="header-controls">
+    <span class="ctrl-label">算法</span>
+    <select id="algo-select">
+      <option value="SCAN">SCAN（扫描）</option>
+      <option value="LOOK">LOOK（寻找）</option>
+      <option value="FCFS">FCFS（先来先服务）</option>
+      <option value="SSTF">SSTF（最短寻道）</option>
+    </select>
+    <div class="header-divider"></div>
+    <span class="ctrl-label">楼层</span>
+    <input type="number" id="floors-input" value="12" min="5" max="20" />
+    <span class="ctrl-label">电梯数</span>
+    <input type="number" id="elevs-input" value="3" min="1" max="4" />
+    <button class="btn btn-sm" id="apply-btn">应用</button>
+    <div class="header-divider"></div>
+    <span class="ctrl-label">速度</span>
+    <input type="range" id="speed-slider" min="1" max="8" value="3" />
+    <span id="speed-display" class="ctrl-label">3×</span>
+    <div class="header-divider"></div>
+    <label class="toggle-wrap" title="自动随机生成请求">
+      <span class="ctrl-label">自动</span>
+      <label class="toggle">
+        <input type="checkbox" id="auto-toggle" />
+        <span class="toggle-slider"></span>
+      </label>
+    </label>
+    <div class="header-divider"></div>
+    <button class="btn primary" id="start-btn">▶ 开始</button>
+    <button class="btn" id="pause-btn" disabled>⏸ 暂停</button>
+    <button class="btn danger" id="reset-btn">↺ 重置</button>
+    <div class="header-divider"></div>
+    <span id="time-display">T: 0s</span>
+    <span id="sim-status" class="status-stopped">停止</span>
+  </div>
+</header>
+
+<!-- ===== Main ===== -->
+<main id="app-main">
+  <!-- Building section -->
+  <section id="building-section">
+    <div id="building-wrap">
+      <div id="shaft-headers"></div>
+      <div id="building">
+        <div class="floor-labels" id="floor-labels"></div>
+        <div class="pax-column" id="pax-column"></div>
+        <div id="shafts-wrapper"></div>
+        <div class="call-column" id="call-column"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" data-tab="stats">📊 统计</div>
+      <div class="sidebar-tab" data-tab="elevs">🛗 电梯</div>
+      <div class="sidebar-tab" data-tab="ctrl">⚙️ 控制</div>
+      <div class="sidebar-tab" data-tab="log">📋 日志</div>
+    </div>
+
+    <!-- Stats Panel -->
+    <div class="sidebar-panel active" id="panel-stats">
+      <div class="s-card">
+        <div class="s-title">实时统计</div>
+        <div class="stat-grid">
+          <div class="stat-item green">
+            <div class="stat-value" id="stat-completed">0</div>
+            <div class="stat-label">已完成行程</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-waiting">0</div>
+            <div class="stat-label">等待中</div>
+          </div>
+          <div class="stat-item yellow">
+            <div class="stat-value" id="stat-avg-wait">-</div>
+            <div class="stat-label">平均等待(s)</div>
+          </div>
+          <div class="stat-item orange">
+            <div class="stat-value" id="stat-avg-travel">-</div>
+            <div class="stat-label">平均行程(s)</div>
+          </div>
+          <div class="stat-item red">
+            <div class="stat-value" id="stat-floors">0</div>
+            <div class="stat-label">总楼层移动</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="stat-throughput">0</div>
+            <div class="stat-label">吞吐/分钟</div>
+          </div>
+        </div>
+      </div>
+      <div class="s-card">
+        <div class="s-title">性能趋势</div>
+        <canvas id="perf-chart"></canvas>
+      </div>
+      <div class="s-card">
+        <div class="s-title">算法说明</div>
+        <div class="algo-desc" id="algo-desc"></div>
+      </div>
+    </div>
+
+    <!-- Elevators Panel -->
+    <div class="sidebar-panel" id="panel-elevs">
+      <div class="s-card">
+        <div class="s-title">电梯状态</div>
+        <div id="elev-status-list"></div>
+      </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="sidebar-panel" id="panel-ctrl">
+      <div class="s-card">
+        <div class="s-title">手动请求</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">楼层</span>
+          <input type="number" id="req-floor" value="1" min="1" />
+          <select id="req-dir">
+            <option value="1">↑ 上行</option>
+            <option value="-1">↓ 下行</option>
+          </select>
+        </div>
+        <button class="btn primary full-btn" id="add-req-btn">➕ 添加乘客请求</button>
+        <button class="btn full-btn" id="random-burst-btn">🎲 随机批量请求 (×5)</button>
+      </div>
+      <div class="s-card">
+        <div class="s-title">自动生成设置</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">间隔(s)</span>
+          <input type="range" id="auto-interval" min="1" max="15" value="4" />
+          <span id="auto-interval-val" class="ctrl-label">4s</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">每次</span>
+          <input type="range" id="auto-count" min="1" max="5" value="2" />
+          <span id="auto-count-val" class="ctrl-label">2人</span>
+        </div>
+      </div>
+      <div class="s-card">
+        <div class="s-title">场景预设</div>
+        <button class="btn full-btn" id="preset-morning">🌅 早高峰 (集中上行)</button>
+        <button class="btn full-btn" id="preset-evening">🌆 晚高峰 (集中下行)</button>
+        <button class="btn full-btn" id="preset-random">🌀 全随机模式</button>
+      </div>
+    </div>
+
+    <!-- Log Panel -->
+    <div class="sidebar-panel" id="panel-log">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <span style="font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;">事件日志</span>
+        <button class="btn btn-sm" id="clear-log-btn">清空</button>
+      </div>
+      <div id="event-log"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+// ============================================================
+//  ELEVATOR SCHEDULING SIMULATION ENGINE
+// ============================================================
+
+// ---- Constants ----
+const TICKS_PER_SECOND = 20;              // simulation ticks/s (speed=1)
+const BASE_FLOORS_PER_TICK = 0.08;        // floors moved per tick (speed=1)
+const DOOR_OPEN_TICKS = 25;               // ticks doors stay open
+const DOOR_ANIM_TICKS = 8;               // ticks to open/close doors
+const ELEV_COLORS = ['#4fc3f7','#7c4dff','#00e676','#ff9100'];
+// Safe color accessor — uses modulo so out-of-range IDs still get a valid color
+const elevColor = id => ELEV_COLORS[id % ELEV_COLORS.length];
+
+// Dispatch scoring weights
+const DIRECTION_MATCH_WEIGHT = 0.4;       // score multiplier when elevator is heading toward request
+const IDLE_ELEVATOR_WEIGHT = 0.7;         // score multiplier for idle elevators
+
+// Timing constants (in simulation seconds)
+const REDISPATCH_INTERVAL_SECONDS = 2;    // how often to retry dispatching unassigned passengers
+const STATS_RECORD_INTERVAL_SECONDS = 5; // how often to record a perf history point
+
+// UI limits
+const MAX_PERF_HISTORY_POINTS = 60;       // maximum data points in the performance chart
+const MAX_WAITING_PASSENGER_DOTS = 8;     // max colored dots shown per floor in pax-column
+const MAX_LOG_ENTRIES = 200;              // maximum event log entries kept in DOM
+
+// ---- Passenger counter ----
+let passengerCounter = 0;
+
+// ---- Utility ----
+const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const fmt1 = v => Number.isFinite(v) ? v.toFixed(1) : '—';
+
+// ---- Simulation State ----
+let sim = null;
+
+class Elevator {
+  constructor(id, numFloors) {
+    this.id = id;
+    this.numFloors = numFloors;
+    this.position = 1.0;      // current fractional floor (1-based)
+    this.floor = 1;           // current integer floor
+    this.direction = 0;       // -1, 0, 1
+    this.state = 'idle';      // 'idle'|'moving'|'opening'|'open'|'closing'
+    this.doorProgress = 0;    // 0=closed, 1=open
+    this.doorTimer = 0;
+    this.destinations = [];   // ordered floor targets
+    this.passengers = [];     // Passenger objects on board
+    this.capacity = 8;
+    this.floorsMoved = 0;
+  }
+
+  get isFull() { return this.passengers.length >= this.capacity; }
+
+  get nextDest() {
+    return this.destinations.length > 0 ? this.destinations[0] : null;
+  }
+}
+
+class Passenger {
+  constructor(fromFloor, toFloor, time) {
+    this.id = ++passengerCounter;
+    this.fromFloor = fromFloor;
+    this.toFloor = toFloor;
+    this.direction = toFloor > fromFloor ? 1 : -1;
+    this.requestTime = time;
+    this.boardTime = null;
+    this.exitTime = null;
+    this.elevatorId = null;
+    this.color = `hsl(${rand(0,360)},70%,60%)`;
+  }
+  get isWaiting() { return this.boardTime === null && this.exitTime === null; }
+  get isRiding() { return this.boardTime !== null && this.exitTime === null; }
+  get isDone() { return this.exitTime !== null; }
+}
+
+class Simulation {
+  constructor(cfg) {
+    this.numFloors = cfg.numFloors;
+    this.numElevators = cfg.numElevators;
+    this.algorithm = cfg.algorithm;
+    this.ticksPerSec = cfg.ticksPerSec || TICKS_PER_SECOND;
+    this.speed = cfg.speed || 1;
+
+    this.time = 0;            // ticks
+    this.elevators = [];
+    this.passengers = [];     // all passengers ever
+    this.waitingByFloor = {}; // floor -> [Passenger]
+    this.callButtons = {};    // `${floor}_${dir}` -> true/false (active)
+    this.stats = {
+      completed: 0,
+      totalWaitTicks: 0,
+      totalTravelTicks: 0,
+      perfHistory: [],        // {time, waitAvg, completed}
+    };
+
+    for (let f = 1; f <= this.numFloors; f++) {
+      this.waitingByFloor[f] = [];
+    }
+
+    for (let i = 0; i < this.numElevators; i++) {
+      this.elevators.push(new Elevator(i, this.numFloors));
+    }
+  }
+
+  get simSeconds() { return this.time / TICKS_PER_SECOND; }
+
+  // -- Public API --
+
+  addPassenger(fromFloor, toFloor) {
+    if (fromFloor === toFloor) return null;
+    const p = new Passenger(fromFloor, toFloor, this.time);
+    this.passengers.push(p);
+    this.waitingByFloor[fromFloor].push(p);
+    const key = `${fromFloor}_${p.direction}`;
+    this.callButtons[key] = true;
+    this._dispatchToElevator(p);
+    return p;
+  }
+
+  addRandomPassenger() {
+    const from = rand(1, this.numFloors);
+    let to;
+    do { to = rand(1, this.numFloors); } while (to === from);
+    return this.addPassenger(from, to);
+  }
+
+  step() {
+    const speedMultiplier = this.speed;
+    const stepsPerTick = speedMultiplier;
+    // Do multiple sub-steps to simulate speed
+    for (let s = 0; s < stepsPerTick; s++) {
+      this._singleStep();
+    }
+  }
+
+  // -- Private --
+
+  _singleStep() {
+    this.time++;
+    for (const elev of this.elevators) {
+      this._stepElevator(elev);
+    }
+    // Periodically re-dispatch unassigned passengers
+    if (this.time % (TICKS_PER_SECOND * REDISPATCH_INTERVAL_SECONDS) === 0) {
+      this._reDispatchUnassigned();
+    }
+    // Periodic stats record
+    if (this.time % (TICKS_PER_SECOND * STATS_RECORD_INTERVAL_SECONDS) === 0) {
+      const avgWait = this.stats.completed > 0
+        ? (this.stats.totalWaitTicks / this.stats.completed / TICKS_PER_SECOND)
+        : 0;
+      this.stats.perfHistory.push({
+        time: this.simSeconds,
+        waitAvg: avgWait,
+        completed: this.stats.completed,
+      });
+      if (this.stats.perfHistory.length > MAX_PERF_HISTORY_POINTS) this.stats.perfHistory.shift();
+    }
+  }
+
+  _stepElevator(elev) {
+    switch (elev.state) {
+      case 'idle': {
+        this._sortQueue(elev);
+        if (elev.destinations.length > 0) {
+          const next = this._getNext(elev);
+          const diff = next - elev.position;
+          if (Math.abs(diff) < 0.05) {
+            elev.position = next;
+            elev.floor = next;
+            elev.destinations = elev.destinations.filter(f => f !== next);
+            elev.state = 'opening';
+            elev.doorProgress = 0;
+            elev.doorTimer = DOOR_ANIM_TICKS;
+          } else {
+            elev.direction = diff > 0 ? 1 : -1;
+            elev.state = 'moving';
+          }
+        } else {
+          elev.direction = 0;
+        }
+        break;
+      }
+      case 'moving': {
+        const next = this._getNext(elev);
+        if (next === null) { elev.state = 'idle'; break; }
+        const spd = BASE_FLOORS_PER_TICK;
+        const prevPos = elev.position;
+        if (next > elev.position) {
+          elev.direction = 1;
+          elev.position = Math.min(elev.position + spd, next);
+        } else {
+          elev.direction = -1;
+          elev.position = Math.max(elev.position - spd, next);
+        }
+        elev.floorsMoved += Math.abs(elev.position - prevPos);
+
+        if (Math.abs(elev.position - next) < 0.001) {
+          elev.position = next;
+          elev.floor = next;
+          elev.destinations = elev.destinations.filter(f => f !== next);
+          elev.state = 'opening';
+          elev.doorProgress = 0;
+          elev.doorTimer = DOOR_ANIM_TICKS;
+        }
+        break;
+      }
+      case 'opening': {
+        elev.doorTimer--;
+        elev.doorProgress = clamp(1 - elev.doorTimer / DOOR_ANIM_TICKS, 0, 1);
+        if (elev.doorTimer <= 0) {
+          elev.doorProgress = 1;
+          elev.state = 'open';
+          elev.doorTimer = DOOR_OPEN_TICKS;
+          this._handleBoardingAndExiting(elev);
+        }
+        break;
+      }
+      case 'open': {
+        elev.doorTimer--;
+        if (elev.doorTimer <= 0) {
+          elev.state = 'closing';
+          elev.doorTimer = DOOR_ANIM_TICKS;
+        }
+        break;
+      }
+      case 'closing': {
+        elev.doorTimer--;
+        elev.doorProgress = clamp(elev.doorTimer / DOOR_ANIM_TICKS, 0, 1);
+        if (elev.doorTimer <= 0) {
+          elev.doorProgress = 0;
+          elev.state = 'idle';
+        }
+        break;
+      }
+    }
+  }
+
+  _handleBoardingAndExiting(elev) {
+    const floor = elev.floor;
+
+    // -- Passengers exit --
+    const exiting = elev.passengers.filter(p => p.toFloor === floor);
+    for (const p of exiting) {
+      p.exitTime = this.time;
+      this.stats.completed++;
+      this.stats.totalWaitTicks += (p.boardTime - p.requestTime);
+      this.stats.totalTravelTicks += (p.exitTime - p.boardTime);
+    }
+    elev.passengers = elev.passengers.filter(p => p.toFloor !== floor);
+
+    // Re-try dispatching any passengers that couldn't be assigned earlier
+    this._reDispatchUnassigned();
+
+    // -- Passengers board (those assigned to this elevator) --
+    const waiting = (this.waitingByFloor[floor] || []).filter(
+      p => p.elevatorId === elev.id && p.isWaiting
+    );
+    for (const p of waiting) {
+      if (elev.passengers.length < elev.capacity) {
+        p.boardTime = this.time;
+        elev.passengers.push(p);
+        this.waitingByFloor[floor] = this.waitingByFloor[floor].filter(w => w !== p);
+        // Add destination
+        if (!elev.destinations.includes(p.toFloor)) {
+          elev.destinations.push(p.toFloor);
+        }
+        // Clear call button if no more waiting for that direction
+        const key = `${floor}_${p.direction}`;
+        const still = (this.waitingByFloor[floor] || []).some(w => w.direction === p.direction && w.isWaiting);
+        if (!still) this.callButtons[key] = false;
+      }
+    }
+    this._sortQueue(elev);
+  }
+
+  _dispatchToElevator(passenger) {
+    const best = this._findBestElevator(passenger);
+    if (!best) return; // will be retried in _reDispatchUnassigned
+    passenger.elevatorId = best.id;
+    if (!best.destinations.includes(passenger.fromFloor)) {
+      best.destinations.push(passenger.fromFloor);
+    }
+    this._sortQueue(best);
+  }
+
+  // Re-check all unassigned waiting passengers and try to dispatch them
+  _reDispatchUnassigned() {
+    for (const floor in this.waitingByFloor) {
+      for (const p of this.waitingByFloor[floor]) {
+        if (p.isWaiting && p.elevatorId === null) {
+          this._dispatchToElevator(p);
+        }
+      }
+    }
+  }
+
+  // How many passengers are committed to an elevator (on board + assigned & waiting)
+  _elevatorLoad(elev) {
+    let count = elev.passengers.length;
+    for (const floor in this.waitingByFloor) {
+      count += (this.waitingByFloor[floor] || []).filter(
+        p => p.elevatorId === elev.id && p.isWaiting
+      ).length;
+    }
+    return count;
+  }
+
+  _findBestElevator(passenger) {
+    let bestElev = null, bestScore = Infinity;
+    for (const elev of this.elevators) {
+      if (this._elevatorLoad(elev) >= elev.capacity) continue;
+      let dist = Math.abs(elev.position - passenger.fromFloor);
+      // Prefer elevator already moving toward this floor in same direction
+      if (elev.direction === passenger.direction) {
+        if (passenger.direction === 1 && elev.position <= passenger.fromFloor) dist *= DIRECTION_MATCH_WEIGHT;
+        if (passenger.direction === -1 && elev.position >= passenger.fromFloor) dist *= DIRECTION_MATCH_WEIGHT;
+      }
+      if (elev.state === 'idle') dist *= IDLE_ELEVATOR_WEIGHT;
+      if (dist < bestScore) { bestScore = dist; bestElev = elev; }
+    }
+    // If all fully committed, pick the one with fewest committed passengers
+    if (!bestElev) {
+      bestElev = this.elevators.reduce((a, b) =>
+        this._elevatorLoad(a) <= this._elevatorLoad(b) ? a : b
+      );
+    }
+    return bestElev;
+  }
+
+  _getNext(elev) {
+    if (elev.destinations.length === 0) return null;
+    if (this.algorithm === 'SSTF') {
+      return elev.destinations.reduce((best, f) =>
+        Math.abs(f - elev.position) < Math.abs(best - elev.position) ? f : best
+      );
+    }
+    return elev.destinations[0];
+  }
+
+  _sortQueue(elev) {
+    switch (this.algorithm) {
+      case 'FCFS':
+        break; // keep insertion order
+      case 'SCAN':
+      case 'LOOK': {
+        const dir = elev.direction || 1;
+        const pos = elev.position;
+        const ahead = elev.destinations.filter(f => dir === 1 ? f >= pos : f <= pos);
+        const behind = elev.destinations.filter(f => dir === 1 ? f < pos : f > pos);
+        ahead.sort((a, b) => dir === 1 ? a - b : b - a);
+        behind.sort((a, b) => dir === 1 ? b - a : a - b);
+        elev.destinations = [...ahead, ...behind];
+        break;
+      }
+      case 'SSTF': {
+        elev.destinations.sort((a, b) =>
+          Math.abs(a - elev.position) - Math.abs(b - elev.position)
+        );
+        break;
+      }
+    }
+  }
+}
+
+// ============================================================
+//  UI / RENDERER
+// ============================================================
+
+const ALGO_DESCS = {
+  FCFS: '先来先服务（FCFS）：按请求到达顺序依次处理。简单公平，但效率较低，可能造成较长等待时间。',
+  SCAN: '扫描算法（SCAN / 电梯算法）：电梯沿一个方向行进至顶端（或底端），然后反向继续服务。避免饥饿，效率高。',
+  LOOK: '查找算法（LOOK）：与SCAN类似，但到达最后一个请求后立即反向，不必到达物理端点。更优化，减少无效行程。',
+  SSTF: '最短寻道优先（SSTF）：每次选择距当前位置最近的请求。响应快，但可能导致两端请求饥饿。',
+};
+
+let running = false;
+let animFrame = null;
+let lastTick = 0;
+let autoTimer = 0;
+
+// DOM refs
+const $ = id => document.getElementById(id);
+const algoSelect = $('algo-select');
+const floorsInput = $('floors-input');
+const elevsInput = $('elevs-input');
+const speedSlider = $('speed-slider');
+const speedDisplay = $('speed-display');
+const startBtn = $('start-btn');
+const pauseBtn = $('pause-btn');
+const resetBtn = $('reset-btn');
+const autoToggle = $('auto-toggle');
+const timeDisplay = $('time-display');
+const simStatus = $('sim-status');
+const eventLog = $('event-log');
+
+// Current config
+let config = {
+  numFloors: 12,
+  numElevators: 3,
+  algorithm: 'SCAN',
+  speed: 3,
+};
+
+// ---- Build DOM ----
+function buildUI() {
+  config.numFloors = clamp(parseInt(floorsInput.value) || 12, 5, 20);
+  config.numElevators = clamp(parseInt(elevsInput.value) || 3, 1, 4);
+  config.algorithm = algoSelect.value;
+  config.speed = parseInt(speedSlider.value);
+
+  // Building
+  const floorH = getComputedStyle(document.documentElement).getPropertyValue('--floor-h').trim();
+  const shaftW = getComputedStyle(document.documentElement).getPropertyValue('--shaft-w').trim();
+  const buildingHeight = config.numFloors * parseInt(floorH);
+
+  // Floor labels
+  const labelsEl = $('floor-labels');
+  labelsEl.innerHTML = '';
+  for (let f = 1; f <= config.numFloors; f++) {
+    const d = document.createElement('div');
+    d.className = 'floor-label' + (f === 1 ? ' ground' : '');
+    d.textContent = f === 1 ? 'G' : `${f}`;
+    labelsEl.appendChild(d);
+  }
+
+  // Shaft headers
+  const headersEl = $('shaft-headers');
+  headersEl.innerHTML = '';
+  for (let i = 0; i < config.numElevators; i++) {
+    const d = document.createElement('div');
+    d.className = 'shaft-header-lbl';
+    d.textContent = `电梯 ${i + 1}`;
+    d.style.color = elevColor(i);
+    headersEl.appendChild(d);
+  }
+
+  // Shafts
+  const shaftsEl = $('shafts-wrapper');
+  shaftsEl.innerHTML = '';
+  for (let i = 0; i < config.numElevators; i++) {
+    const shaft = document.createElement('div');
+    shaft.className = 'shaft';
+    shaft.id = `shaft-${i}`;
+    shaft.style.height = buildingHeight + 'px';
+
+    const bg = document.createElement('div');
+    bg.className = 'shaft-bg';
+    shaft.appendChild(bg);
+
+    const rail = document.createElement('div');
+    rail.className = 'shaft-rail';
+    shaft.appendChild(rail);
+
+    // Elevator car
+    const car = document.createElement('div');
+    car.className = 'elevator-car';
+    car.id = `car-${i}`;
+    car.style.color = elevColor(i);
+    car.style.bottom = '4px'; // floor 1
+
+    const glow = document.createElement('div');
+    glow.className = 'car-glow';
+    car.appendChild(glow);
+
+    const doorL = document.createElement('div');
+    doorL.className = 'elevator-door left';
+    car.appendChild(doorL);
+    const doorR = document.createElement('div');
+    doorR.className = 'elevator-door right';
+    car.appendChild(doorR);
+
+    const idLabel = document.createElement('div');
+    idLabel.className = 'car-id';
+    idLabel.id = `car-id-${i}`;
+    idLabel.textContent = i + 1;
+    car.appendChild(idLabel);
+
+    const dirLabel = document.createElement('div');
+    dirLabel.className = 'car-dir';
+    dirLabel.id = `car-dir-${i}`;
+    dirLabel.textContent = '';
+    car.appendChild(dirLabel);
+
+    const paxLabel = document.createElement('div');
+    paxLabel.className = 'car-passengers';
+    paxLabel.id = `car-pax-${i}`;
+    paxLabel.textContent = '';
+    car.appendChild(paxLabel);
+
+    shaft.appendChild(car);
+    shaftsEl.appendChild(shaft);
+  }
+
+  // Waiting passengers column
+  const paxCol = $('pax-column');
+  paxCol.innerHTML = '';
+  for (let f = 1; f <= config.numFloors; f++) {
+    const row = document.createElement('div');
+    row.className = 'pax-floor';
+    row.id = `pax-floor-${f}`;
+    paxCol.appendChild(row);
+  }
+
+  // Call buttons column
+  const callCol = $('call-column');
+  callCol.innerHTML = '';
+  for (let f = 1; f <= config.numFloors; f++) {
+    const row = document.createElement('div');
+    row.className = 'call-floor';
+
+    if (f < config.numFloors) {
+      const btnUp = document.createElement('button');
+      btnUp.className = 'call-btn';
+      btnUp.id = `call-${f}-1`;
+      btnUp.title = `${f}楼 上行`;
+      btnUp.textContent = '▲';
+      btnUp.addEventListener('click', () => onCallBtn(f, 1));
+      row.appendChild(btnUp);
+    }
+    if (f > 1) {
+      const btnDown = document.createElement('button');
+      btnDown.className = 'call-btn';
+      btnDown.id = `call-${f}--1`;
+      btnDown.title = `${f}楼 下行`;
+      btnDown.textContent = '▼';
+      btnDown.addEventListener('click', () => onCallBtn(f, -1));
+      row.appendChild(btnDown);
+    }
+
+    callCol.appendChild(row);
+  }
+
+  // Update req-floor max based on current config
+  const reqFloorInput = $('req-floor');
+  if (reqFloorInput) {
+    reqFloorInput.max = config.numFloors;
+    reqFloorInput.value = clamp(parseInt(reqFloorInput.value) || 1, 1, config.numFloors);
+  }
+
+  // Waiting passengers per floor (visual dots)
+  // We add these as absolutely positioned in the shafts wrapper area
+  // Actually we'll render them via JS in renderFrame
+}
+
+function onCallBtn(floor, direction) {
+  if (!sim || !running) {
+    logEntry('warn', `模拟器未运行，请先点击「开始」`);
+    return;
+  }
+  const toFloor = direction === 1
+    ? rand(floor + 1, config.numFloors)
+    : rand(1, floor - 1);
+  const p = sim.addPassenger(floor, toFloor);
+  if (p) logEntry('info', `${floor}楼 乘客呼叫 ${direction > 0 ? '上' : '下'}行 → 前往${toFloor}楼`);
+}
+
+// ---- Simulation Loop ----
+function initSim() {
+  sim = new Simulation({
+    numFloors: config.numFloors,
+    numElevators: config.numElevators,
+    algorithm: config.algorithm,
+    speed: config.speed,
+  });
+  passengerCounter = 0;
+  updateStats();
+  updateElevStatus();
+  renderFrame();
+  logEntry('info', `模拟器已初始化 — ${config.numFloors}层 · ${config.numElevators}台电梯 · 算法: ${config.algorithm}`);
+  $('algo-desc').textContent = ALGO_DESCS[config.algorithm];
+}
+
+let tickAccum = 0;
+function loop(ts) {
+  if (!running) return;
+  animFrame = requestAnimationFrame(loop);
+
+  const TICK_MS = 1000 / TICKS_PER_SECOND;
+  tickAccum += ts - (lastTick || ts);
+  lastTick = ts;
+
+  while (tickAccum >= TICK_MS) {
+    tickAccum -= TICK_MS;
+    sim.step();
+
+    // Auto-generate
+    if (autoToggle.checked) {
+      autoTimer++;
+      const interval = parseInt($('auto-interval').value) * TICKS_PER_SECOND;
+      const count = parseInt($('auto-count').value);
+      if (autoTimer >= interval) {
+        autoTimer = 0;
+        for (let i = 0; i < count; i++) sim.addRandomPassenger();
+      }
+    }
+  }
+
+  renderFrame();
+  updateStats();
+  updateElevStatus();
+  timeDisplay.textContent = `T: ${sim.simSeconds.toFixed(1)}s`;
+}
+
+// Track previous elevator states for transition detection
+const prevElevStates = {};
+
+function renderFrame() {
+  if (!sim) return;
+  const floorH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--floor-h'));
+  const carH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--car-h'));
+
+  // Update elevator cars
+  for (const elev of sim.elevators) {
+    const car = $(`car-${elev.id}`);
+    if (!car) continue;
+
+    // Position: bottom = (floor - 1) * floorH + padding
+    const bottomPx = (elev.position - 1) * floorH + (floorH - carH) / 2;
+    car.style.bottom = bottomPx + 'px';
+
+    // Detect door-open transition → log it
+    const prevState = prevElevStates[elev.id];
+    if (elev.state === 'open' && prevState !== 'open' && prevState !== 'opening') {
+      // Trigger floor highlight
+      const shaft = $(`shaft-${elev.id}`);
+      if (shaft) {
+        const line = document.createElement('div');
+        line.className = 'floor-active-line';
+        line.style.color = elevColor(elev.id);
+        line.style.bottom = bottomPx + 'px';
+        shaft.appendChild(line);
+        setTimeout(() => line.remove(), 1600);
+      }
+      logEntry('info', `电梯${elev.id + 1} 到达 ${elev.floor}楼，门已开`);
+    }
+    prevElevStates[elev.id] = elev.state;
+
+    // Door state
+    if (elev.state === 'open' || elev.state === 'opening') {
+      car.classList.add('door-open');
+    } else {
+      car.classList.remove('door-open');
+    }
+
+    // Door visual
+    const doorPct = (1 - elev.doorProgress) * 50;
+    const doorL = car.querySelector('.elevator-door.left');
+    const doorR = car.querySelector('.elevator-door.right');
+    if (doorL) doorL.style.width = doorPct + '%';
+    if (doorR) doorR.style.width = doorPct + '%';
+
+    // Direction indicator
+    const dirEl = $(`car-dir-${elev.id}`);
+    if (dirEl) {
+      dirEl.textContent = elev.direction === 1 ? '▲' : elev.direction === -1 ? '▼' : '';
+    }
+
+    // Passenger count
+    const paxEl = $(`car-pax-${elev.id}`);
+    if (paxEl) {
+      const n = elev.passengers.length;
+      paxEl.textContent = n > 0 ? `👤×${n}` : '';
+    }
+  }
+
+  // Update call buttons
+  for (let f = 1; f <= config.numFloors; f++) {
+    for (const dir of [1, -1]) {
+      const btn = $(`call-${f}-${dir}`);
+      if (!btn) continue;
+      const key = `${f}_${dir}`;
+      const active = sim.callButtons[key] === true;
+      btn.classList.toggle('active', active);
+    }
+  }
+
+  // Update waiting passenger dots
+  renderWaitingDots();
+
+  // Update perf chart
+  renderPerfChart();
+}
+
+function renderWaitingDots() {
+  if (!sim) return;
+
+  for (let f = 1; f <= config.numFloors; f++) {
+    const row = $(`pax-floor-${f}`);
+    if (!row) continue;
+    row.innerHTML = '';
+
+    const waiting = (sim.waitingByFloor[f] || []).filter(p => p.isWaiting);
+    const maxDots = MAX_WAITING_PASSENGER_DOTS;
+    for (const p of waiting.slice(0, maxDots)) {
+      const dot = document.createElement('div');
+      dot.className = 'pax-dot';
+      dot.style.background = p.color;
+      dot.title = `乘客 #${p.id}: ${p.fromFloor}→${p.toFloor}楼`;
+      row.appendChild(dot);
+    }
+    if (waiting.length > maxDots) {
+      const more = document.createElement('div');
+      more.className = 'pax-more';
+      more.textContent = `+${waiting.length - maxDots}`;
+      row.appendChild(more);
+    }
+  }
+}
+
+// ---- Stats ----
+function updateStats() {
+  if (!sim) return;
+  const s = sim.stats;
+
+  $('stat-completed').textContent = s.completed;
+
+  let totalWaiting = 0;
+  for (const f in sim.waitingByFloor) {
+    totalWaiting += (sim.waitingByFloor[f] || []).filter(p => p.isWaiting).length;
+  }
+  $('stat-waiting').textContent = totalWaiting;
+
+  const avgWait = s.completed > 0
+    ? (s.totalWaitTicks / s.completed / TICKS_PER_SECOND).toFixed(1)
+    : '—';
+  $('stat-avg-wait').textContent = avgWait;
+
+  const avgTravel = s.completed > 0
+    ? (s.totalTravelTicks / s.completed / TICKS_PER_SECOND).toFixed(1)
+    : '—';
+  $('stat-avg-travel').textContent = avgTravel;
+
+  const totalFloors = sim.elevators.reduce((sum, e) => sum + e.floorsMoved, 0);
+  $('stat-floors').textContent = Math.round(totalFloors);
+
+  const tpm = sim.simSeconds > 0
+    ? (s.completed / sim.simSeconds * 60).toFixed(1)
+    : '0';
+  $('stat-throughput').textContent = tpm;
+}
+
+function updateElevStatus() {
+  if (!sim) return;
+  const list = $('elev-status-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  for (const elev of sim.elevators) {
+    const card = document.createElement('div');
+    card.className = 'elev-status-card';
+
+    const stateLabel = { idle: '空闲', moving: '运行中', opening: '开门中', open: '停靠', closing: '关门中' }[elev.state] || elev.state;
+    const badgeClass = { idle: 'badge-idle', moving: 'badge-moving', open: 'badge-open', opening: 'badge-open', closing: 'badge-idle' }[elev.state] || 'badge-idle';
+
+    const header = document.createElement('div');
+    header.className = 'elev-status-header';
+    header.innerHTML = `
+      <div class="elev-color-dot" style="background:${elevColor(elev.id)}"></div>
+      <div class="elev-status-name" style="color:${elevColor(elev.id)}">电梯 ${elev.id + 1}</div>
+      <div class="elev-status-badge ${badgeClass}">${stateLabel}</div>
+    `;
+
+    const dirStr = elev.direction === 1 ? '▲ 上行' : elev.direction === -1 ? '▼ 下行' : '— 停止';
+    const info = document.createElement('div');
+    info.className = 'elev-status-info';
+    info.innerHTML = `
+      <div class="elev-info-item">楼层 <span>${Math.round(elev.position * 10) / 10}</span></div>
+      <div class="elev-info-item">方向 <span>${dirStr}</span></div>
+      <div class="elev-info-item">乘客 <span>${elev.passengers.length}/${elev.capacity}</span></div>
+      <div class="elev-info-item">移动 <span>${Math.round(elev.floorsMoved)}层</span></div>
+    `;
+
+    // Queue pills
+    const pills = document.createElement('div');
+    pills.className = 'queue-pills';
+    if (elev.destinations.length === 0) {
+      const empty = document.createElement('span');
+      empty.style.cssText = 'font-size:10px;color:var(--text-dim)';
+      empty.textContent = '无待达楼层';
+      pills.appendChild(empty);
+    } else {
+      elev.destinations.slice(0, 12).forEach((f, idx) => {
+        const pill = document.createElement('span');
+        pill.className = 'queue-pill' + (idx === 0 ? ' current' : '');
+        pill.textContent = f;
+        pills.appendChild(pill);
+      });
+    }
+
+    // Capacity bar
+    const capWrap = document.createElement('div');
+    capWrap.className = 'cap-bar-wrap';
+    const capBar = document.createElement('div');
+    capBar.className = 'cap-bar';
+    const pct = (elev.passengers.length / elev.capacity * 100);
+    capBar.style.width = pct + '%';
+    capBar.style.background = pct > 75 ? 'var(--red)' : pct > 50 ? 'var(--orange)' : 'var(--green)';
+    capWrap.appendChild(capBar);
+
+    card.appendChild(header);
+    card.appendChild(info);
+    card.appendChild(pills);
+    card.appendChild(capWrap);
+    list.appendChild(card);
+  }
+}
+
+// ---- Performance Chart ----
+function renderPerfChart() {
+  const canvas = $('perf-chart');
+  if (!canvas || !sim) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.parentElement.clientWidth - 24;
+  const H = 80;
+  canvas.width = W;
+  canvas.height = H;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const hist = sim.stats.perfHistory;
+  if (hist.length < 2) {
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('等待数据...', W / 2, H / 2 + 4);
+    return;
+  }
+
+  // Background
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = (i / 4) * H;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  const maxWait = Math.max(...hist.map(h => h.waitAvg), 1);
+
+  // Draw wait avg line
+  ctx.beginPath();
+  ctx.strokeStyle = '#ffea00';
+  ctx.lineWidth = 2;
+  hist.forEach((h, i) => {
+    const x = (i / (hist.length - 1)) * W;
+    const y = H - (h.waitAvg / maxWait) * (H - 8) - 4;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Fill under line
+  ctx.beginPath();
+  hist.forEach((h, i) => {
+    const x = (i / (hist.length - 1)) * W;
+    const y = H - (h.waitAvg / maxWait) * (H - 8) - 4;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(W, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,234,0,0.08)';
+  ctx.fill();
+
+  // Label
+  ctx.fillStyle = 'rgba(255,234,0,0.8)';
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText(`平均等待: ${fmt1(hist[hist.length - 1].waitAvg)}s`, 4, 12);
+}
+
+// ---- Event Log ----
+function logEntry(type, msg) {
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  const timeStr = sim ? sim.simSeconds.toFixed(1) : '0.0';
+  entry.innerHTML = `<span class="log-time">${timeStr}s</span><span class="log-msg">${msg}</span>`;
+  eventLog.prepend(entry);
+  // Keep max entries
+  while (eventLog.children.length > MAX_LOG_ENTRIES) eventLog.removeChild(eventLog.lastChild);
+}
+
+// ---- Controls ----
+startBtn.addEventListener('click', () => {
+  if (!sim) initSim();
+  running = true;
+  lastTick = 0;
+  tickAccum = 0;
+  startBtn.disabled = true;
+  pauseBtn.disabled = false;
+  simStatus.textContent = '运行中';
+  simStatus.className = 'status-running';
+  animFrame = requestAnimationFrame(loop);
+  logEntry('success', '模拟器已启动');
+});
+
+pauseBtn.addEventListener('click', () => {
+  running = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  startBtn.disabled = false;
+  startBtn.textContent = '▶ 继续';
+  pauseBtn.disabled = true;
+  simStatus.textContent = '已暂停';
+  simStatus.className = 'status-paused';
+  logEntry('warn', '模拟器已暂停');
+});
+
+resetBtn.addEventListener('click', () => {
+  running = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  startBtn.disabled = false;
+  startBtn.textContent = '▶ 开始';
+  pauseBtn.disabled = true;
+  simStatus.textContent = '停止';
+  simStatus.className = 'status-stopped';
+  autoTimer = 0;
+  buildUI();
+  initSim();
+  logEntry('warn', '模拟器已重置');
+});
+
+$('apply-btn').addEventListener('click', () => {
+  running = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  startBtn.disabled = false;
+  startBtn.textContent = '▶ 开始';
+  pauseBtn.disabled = true;
+  simStatus.textContent = '停止';
+  simStatus.className = 'status-stopped';
+  buildUI();
+  initSim();
+});
+
+speedSlider.addEventListener('input', () => {
+  const v = parseInt(speedSlider.value);
+  speedDisplay.textContent = v + '×';
+  config.speed = v;
+  if (sim) sim.speed = v;
+});
+
+algoSelect.addEventListener('change', () => {
+  config.algorithm = algoSelect.value;
+  if (sim) {
+    sim.algorithm = config.algorithm;
+    $('algo-desc').textContent = ALGO_DESCS[config.algorithm];
+    logEntry('info', `算法切换为: ${config.algorithm}`);
+  }
+});
+
+// Sidebar tabs
+document.querySelectorAll('.sidebar-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $(`panel-${tab.dataset.tab}`).classList.add('active');
+  });
+});
+
+$('clear-log-btn').addEventListener('click', () => { eventLog.innerHTML = ''; });
+
+$('add-req-btn').addEventListener('click', () => {
+  if (!sim || !running) { logEntry('warn', '模拟器未运行'); return; }
+  const floor = clamp(parseInt($('req-floor').value) || 1, 1, config.numFloors);
+  const dir = parseInt($('req-dir').value);
+  if (dir === 1 && floor >= config.numFloors) { logEntry('error', '最高层无法上行'); return; }
+  if (dir === -1 && floor <= 1) { logEntry('error', '最低层无法下行'); return; }
+  const to = dir === 1 ? rand(floor + 1, config.numFloors) : rand(1, floor - 1);
+  sim.addPassenger(floor, to);
+  logEntry('info', `手动添加: ${floor}楼 ${dir > 0 ? '上' : '下'}行 → ${to}楼`);
+});
+
+$('random-burst-btn').addEventListener('click', () => {
+  if (!sim || !running) { logEntry('warn', '模拟器未运行'); return; }
+  for (let i = 0; i < 5; i++) sim.addRandomPassenger();
+  logEntry('info', '随机添加5名乘客');
+});
+
+$('auto-interval').addEventListener('input', function() {
+  $('auto-interval-val').textContent = this.value + 's';
+});
+$('auto-count').addEventListener('input', function() {
+  $('auto-count-val').textContent = this.value + '人';
+});
+
+// Scenarios
+$('preset-morning').addEventListener('click', () => {
+  if (!sim || !running) { logEntry('warn', '模拟器未运行'); return; }
+  // Morning rush: many people going from floor 1 upward
+  for (let i = 0; i < 8; i++) {
+    const to = rand(3, config.numFloors);
+    sim.addPassenger(1, to);
+  }
+  // Some from mid floors going up too
+  for (let i = 0; i < 4; i++) {
+    const from = rand(2, Math.floor(config.numFloors / 2));
+    const to = rand(from + 1, config.numFloors);
+    sim.addPassenger(from, to);
+  }
+  logEntry('warn', '🌅 早高峰场景已触发 — 12名乘客集中上行');
+});
+
+$('preset-evening').addEventListener('click', () => {
+  if (!sim || !running) { logEntry('warn', '模拟器未运行'); return; }
+  // Evening rush: many people going down to floor 1
+  for (let i = 0; i < 8; i++) {
+    const from = rand(3, config.numFloors);
+    sim.addPassenger(from, 1);
+  }
+  for (let i = 0; i < 4; i++) {
+    const from = rand(Math.floor(config.numFloors / 2) + 1, config.numFloors);
+    const to = rand(1, from - 1);
+    sim.addPassenger(from, to);
+  }
+  logEntry('warn', '🌆 晚高峰场景已触发 — 12名乘客集中下行');
+});
+
+$('preset-random').addEventListener('click', () => {
+  if (!sim || !running) { logEntry('warn', '模拟器未运行'); return; }
+  for (let i = 0; i < 15; i++) sim.addRandomPassenger();
+  logEntry('warn', '🌀 随机模式 — 15名乘客随机分布');
+});
+
+// ---- Init ----
+function init() {
+  buildUI();
+  initSim();
+  $('algo-desc').textContent = ALGO_DESCS[config.algorithm];
+  speedDisplay.textContent = config.speed + '×';
+
+  // Initial render
+  renderFrame();
+
+  logEntry('info', '欢迎使用电梯调度模拟器！点击「开始」运行，或点击楼层按钮添加乘客。');
+}
+
+init();
+</script>
+</body>
+</html>
