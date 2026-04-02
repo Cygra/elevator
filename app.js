@@ -590,8 +590,10 @@ function renderBuilding() {
   // Elevator cars — positioned absolutely
   const carsLayer = document.createElement('div');
   carsLayer.id = 'cars-layer';
-  // offset = floor-label(30) + call-btns(16) + waiting(22) = 68px, header row height = 24px
-  carsLayer.style.cssText = 'position:absolute;top:24px;left:68px;display:flex;pointer-events:none;';
+  // Compute left offset from floor-label + call-btns + waiting column widths
+  const leftOffset = 30 + 16 + 22; // floor-label(30) + call-btns(16) + waiting(22)
+  const topOffset = 24; // shaft header height
+  carsLayer.style.cssText = 'position:absolute;top:' + topOffset + 'px;left:' + leftOffset + 'px;display:flex;pointer-events:none;';
   building.style.position = 'relative';
 
   for (let e = 0; e < numElevators; e++) {
@@ -772,13 +774,21 @@ function renderABTable() {
 function renderLog() {
   const list = document.getElementById('log-list');
   if (!list) return;
+  list.innerHTML = '';
   if (logEntries.length === 0) {
-    list.innerHTML = '<div class="log-entry info">' + t('logEmpty') + '</div>';
+    const empty = document.createElement('div');
+    empty.className = 'log-entry info';
+    empty.textContent = t('logEmpty');
+    list.appendChild(empty);
     return;
   }
-  list.innerHTML = logEntries.slice(-MAX_LOG_ENTRIES).reverse().map(e =>
-    '<div class="log-entry ' + e.type + '">[' + e.time + '] ' + e.msg + '</div>'
-  ).join('');
+  const entries = logEntries.slice(-MAX_LOG_ENTRIES).reverse();
+  for (const e of entries) {
+    const div = document.createElement('div');
+    div.className = 'log-entry ' + e.type;
+    div.textContent = '[' + e.time + '] ' + e.msg;
+    list.appendChild(div);
+  }
 }
 
 function logEntry(type, msg) {
@@ -817,7 +827,7 @@ function drawChart() {
     data.forEach((v, i) => {
       const x = (i / (CHART_HISTORY - 1)) * W;
       const y = H - (v / maxV) * (H - 4) - 2;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      if (i === 0) { ctx.moveTo(x, y); } else { ctx.lineTo(x, y); }
     });
     ctx.stroke();
   };
