@@ -10,7 +10,7 @@
 <meta property="og:title" content="电梯调度算法模拟器"/>
 <meta property="og:description" content="交互式电梯调度算法可视化工具，支持FCFS、SCAN、LOOK、SSTF四种算法以及A/B对比模式。"/>
 <meta property="og:type" content="website"/>
-<meta property="og:image" content="https://example.com/elevator-og.png"/>
+
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="Elevator Scheduling Algorithm Simulator"/>
 <meta name="twitter:description" content="Interactive elevator scheduling simulator with FCFS, SCAN, LOOK, SSTF algorithms, A/B comparison, zone mode, and energy stats."/>
@@ -1508,7 +1508,7 @@ function renderABTable() {
   const algoAName = document.getElementById('algo-select').value;
   const algoBName = document.getElementById('ab-algo-select').value;
   let html = `<table class="ab-table">
-    <thead><tr><th>${t('metricCompleted').replace('metricCompleted','')}</th>
+    <thead><tr><th></th>
     <th>${algoAName}</th><th>${algoBName}</th></tr></thead><tbody>`;
   for (const m of metrics) {
     const aNum = parseFloat(m.a);
