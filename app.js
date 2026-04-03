@@ -666,6 +666,7 @@ function render() {
   for (const elev of sim.elevators) {
     const car = document.getElementById('car-' + elev.id);
     if (!car) continue;
+    // Floor 1 = 0px from bottom of the car column; position is 1-indexed
     const bottomPx = (elev.position - 1) * floorH + (floorH - carH) / 2;
     car.style.bottom = bottomPx + 'px';
     car.style.position = 'absolute';
