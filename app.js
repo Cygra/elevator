@@ -39,7 +39,8 @@ const I18N = {
     elevFloor:'楼层', elevStatus:'状态', elevPassengers:'乘客',
     elevIdle:'空闲', elevMoving:'运行中', elevOpen:'已开门',
     elevOpening:'开门中', elevClosing:'关门中',
-    ctrlAddPassenger:'添加乘客', ctrlFrom:'从', ctrlTo:'到', ctrlAdd:'添加',
+    ctrlAddPassenger:'手动添加乘客', ctrlFrom:'出发楼层', ctrlTo:'目标楼层', ctrlAdd:'添加',
+    ctrlAddDesc:'指定一位乘客的出发楼层和目标楼层，模拟该乘客呼叫电梯。',
     ctrlPresets:'场景预设',
     ctrlMorningRush:'🌅 早高峰', ctrlEveningRush:'🌆 晚高峰',
     ctrlLunchtime:'🍜 午餐时间', ctrlCrowd:'🏟️ 满员涌入',
@@ -47,13 +48,17 @@ const I18N = {
     logEmpty:'暂无日志',
     algoDescTitle:'算法详解',
     zoneLow:'低区', zoneHigh:'高区', zoneOdd:'奇数层', zoneEven:'偶数层',
+    zoneLowRange:'低区: {from}F - {to}F', zoneHighRange:'高区: {from}F - {to}F',
+    zoneSplit:'分区分界层', zoneSplitDesc:'低区电梯服务 1F 到分界层，高区电梯服务分界层+1 到顶层。',
     crowdTriggered:'🏟️ 满员涌入: 第{floor}层 {n}名乘客',
     passengerAdded:'乘客: {from}F → {to}F',
     simReset:'模拟已重置',
     applied:'已应用: {floors}层 · {elevs}台电梯',
     autoOn:'自动生成: 已开启', autoOff:'自动生成: 已关闭',
     abEnabled:'A/B对比: 已开启', abDisabled:'A/B对比: 已关闭',
-    abCompare:'A/B 对比', abAlgoA:'算法 A', abAlgoB:'算法 B',
+    abCompare:'A/B 算法对比', abAlgoA:'主算法 (A)', abAlgoB:'对比算法 (B)',
+    abDesc:'开启后，两种算法将同时接收相同的乘客请求，对比各项性能指标。',
+    abHowTo:'先在顶部选择主算法 A，再在下方选择对比算法 B，然后点击顶部「A/B对比」按钮开启。',
     metricCompleted:'完成数', metricAvgWait:'平均等待(s)',
     metricMaxWait:'最大等待(s)', metricAvgTravel:'平均行程(s)',
     metricThroughput:'吞吐/分钟', metricEnergy:'电耗(kWh)',
@@ -106,7 +111,8 @@ const I18N = {
     elevFloor:'Floor', elevStatus:'Status', elevPassengers:'Pax',
     elevIdle:'Idle', elevMoving:'Moving', elevOpen:'Open',
     elevOpening:'Opening', elevClosing:'Closing',
-    ctrlAddPassenger:'Add Passenger', ctrlFrom:'From', ctrlTo:'To', ctrlAdd:'Add',
+    ctrlAddPassenger:'Add Passenger Manually', ctrlFrom:'Depart floor', ctrlTo:'Dest floor', ctrlAdd:'Add',
+    ctrlAddDesc:'Specify a passenger\'s departure and destination floors to simulate an elevator call.',
     ctrlPresets:'Presets',
     ctrlMorningRush:'🌅 Morning', ctrlEveningRush:'🌆 Evening',
     ctrlLunchtime:'🍜 Lunch', ctrlCrowd:'🏟️ Crowd',
@@ -114,13 +120,17 @@ const I18N = {
     logEmpty:'No log entries',
     algoDescTitle:'Algorithm Details',
     zoneLow:'Low Zone', zoneHigh:'High Zone', zoneOdd:'Odd Floors', zoneEven:'Even Floors',
+    zoneLowRange:'Low: {from}F - {to}F', zoneHighRange:'High: {from}F - {to}F',
+    zoneSplit:'Zone split floor', zoneSplitDesc:'Low-zone elevators serve 1F to split floor; high-zone elevators serve split+1 to top.',
     crowdTriggered:'🏟️ Crowd burst: Floor {floor}, {n} passengers',
     passengerAdded:'Passenger: {from}F → {to}F',
     simReset:'Simulation reset',
     applied:'Applied: {floors} floors · {elevs} elevators',
     autoOn:'Auto generate: ON', autoOff:'Auto generate: OFF',
     abEnabled:'A/B compare: ON', abDisabled:'A/B compare: OFF',
-    abCompare:'A/B Comparison', abAlgoA:'Algo A', abAlgoB:'Algo B',
+    abCompare:'A/B Algorithm Comparison', abAlgoA:'Primary (A)', abAlgoB:'Comparison (B)',
+    abDesc:'When enabled, both algorithms receive the same passenger requests to compare performance metrics.',
+    abHowTo:'Select the primary algorithm A in the header, then pick comparison algorithm B below, and click "A/B" button in the header to enable.',
     metricCompleted:'Completed', metricAvgWait:'Avg Wait(s)',
     metricMaxWait:'Max Wait(s)', metricAvgTravel:'Avg Travel(s)',
     metricThroughput:'Thru/min', metricEnergy:'Energy(kWh)',
@@ -222,6 +232,7 @@ class Simulation {
     this.numFloors = cfg.numFloors || 20;
     this.numElevators = cfg.numElevators || 4;
     this.serviceMode = cfg.serviceMode || 'normal';
+    this.zoneSplitFloor = cfg.zoneSplitFloor || Math.ceil(this.numFloors / 2);
     this.ticks = 0;
     this.nextPassengerId = 0;
     this.elevators = [];
@@ -236,7 +247,7 @@ class Simulation {
     for (let i = 0; i < this.numElevators; i++) {
       let startFloor = 1;
       if (this.serviceMode === 'zone' && i >= halfElevs) {
-        startFloor = Math.ceil(this.numFloors / 2) + 1;
+        startFloor = this.zoneSplitFloor + 1;
       }
       startFloor = clamp(startFloor, 1, this.numFloors);
       this.elevators.push(new Elevator(i, startFloor, this.numFloors));
@@ -255,10 +266,9 @@ class Simulation {
 
   _floorServableBy(floor, elevId) {
     if (this.serviceMode === 'normal') return true;
-    const halfFloors = Math.ceil(this.numFloors / 2);
     if (this.serviceMode === 'zone') {
       const halfElevs = Math.ceil(this.numElevators / 2);
-      return elevId < halfElevs ? floor <= halfFloors : floor > halfFloors;
+      return elevId < halfElevs ? floor <= this.zoneSplitFloor : floor > this.zoneSplitFloor;
     }
     if (this.serviceMode === 'odd-even') {
       if (floor === 1) return true;
@@ -466,7 +476,7 @@ let sim = null, simB = null;
 let abEnabled = false, running = false, autoGen = false;
 let autoRate = AUTO_PAX_RATE_DEFAULT, autoTick = 0;
 let rafId = null, lastTime = 0, currentTickMs = 120;
-let config = { numFloors: 20, numElevators: 4, algorithm: 'SCAN', serviceMode: 'normal' };
+let config = { numFloors: 20, numElevators: 4, algorithm: 'SCAN', serviceMode: 'normal', zoneSplitFloor: 10 };
 let chartData = { wait: [], travel: [] };
 let logEntries = [];
 
@@ -498,6 +508,7 @@ function buildUI() {
   renderABTable();
   updateStats();
   renderLog();
+  render(); // position elevator cars at their initial floor
 }
 
 function renderBuilding() {
@@ -540,7 +551,7 @@ function renderBuilding() {
   const inner = document.createElement('div');
   inner.className = 'building-inner';
 
-  for (let f = numFloors; f >= 1; f--) {
+  for (let f = 1; f <= numFloors; f++) {
     const row = document.createElement('div');
     row.className = 'floor-row';
     row.id = 'floor-row-' + f;
@@ -587,18 +598,21 @@ function renderBuilding() {
   }
   building.appendChild(inner);
 
-  // Elevator cars — positioned absolutely
+  // Elevator cars — positioned absolutely over shaft columns
   const carsLayer = document.createElement('div');
   carsLayer.id = 'cars-layer';
   // Compute left offset from floor-label + call-btns + waiting column widths
   const leftOffset = 30 + 16 + 22; // floor-label(30) + call-btns(16) + waiting(22)
   const topOffset = 24; // shaft header height
+  // Total height of floor area = numFloors * floorH
+  const floorH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--floor-h')) || 28;
+  const totalFloorsHeight = numFloors * floorH;
   carsLayer.style.cssText = 'position:absolute;top:' + topOffset + 'px;left:' + leftOffset + 'px;display:flex;pointer-events:none;';
   building.style.position = 'relative';
 
   for (let e = 0; e < numElevators; e++) {
     const col = document.createElement('div');
-    col.style.cssText = 'width:var(--shaft-w);position:relative;';
+    col.style.cssText = 'width:var(--shaft-w);position:relative;height:' + totalFloorsHeight + 'px;';
     col.id = 'car-col-' + e;
     const car = document.createElement('div');
     car.className = 'elev-car';
@@ -618,7 +632,12 @@ function renderBuilding() {
 
 function getZoneLabel(elevId) {
   if (config.serviceMode === 'zone') {
-    return elevId < Math.ceil(config.numElevators / 2) ? t('zoneLow') : t('zoneHigh');
+    const isLow = elevId < Math.ceil(config.numElevators / 2);
+    if (isLow) {
+      return t('zoneLowRange', { from: 1, to: config.zoneSplitFloor });
+    } else {
+      return t('zoneHighRange', { from: config.zoneSplitFloor + 1, to: config.numFloors });
+    }
   }
   if (config.serviceMode === 'odd-even') {
     return elevId % 2 === 0 ? t('zoneOdd') : t('zoneEven');
@@ -912,9 +931,13 @@ function initEventListeners() {
 
   document.getElementById('algo-select').addEventListener('change', e => {
     if (sim) sim.algorithm = e.target.value;
+    // Update A/B panel label showing algo A name
+    const abLabel = document.getElementById('ab-algo-a-label');
+    if (abLabel) abLabel.textContent = e.target.value;
   });
   document.getElementById('service-mode-select').addEventListener('change', () => {
     config.serviceMode = document.getElementById('service-mode-select').value;
+    updateZoneSplitVisibility();
     resetSim();
   });
 
@@ -923,8 +946,10 @@ function initEventListeners() {
     const el = clamp(parseInt(document.getElementById('elevs-input').value) || 4, 1, 6);
     config.numFloors = fl;
     config.numElevators = el;
+    config.zoneSplitFloor = clamp(config.zoneSplitFloor, 1, fl - 1);
     document.getElementById('floors-input').value = fl;
     document.getElementById('elevs-input').value = el;
+    updateZoneSplitSlider();
     resetSim();
     logEntry('success', t('applied', { floors: fl, elevs: el }));
     renderLog();
@@ -1042,15 +1067,53 @@ function initEventListeners() {
     const lbl = document.getElementById('auto-rate-label');
     if (lbl) lbl.textContent = autoRate + ' ticks/pax';
   });
+
+  document.getElementById('zone-split-slider').addEventListener('input', e => {
+    config.zoneSplitFloor = parseInt(e.target.value);
+    updateZoneSplitLabel();
+    resetSim();
+  });
+}
+
+// ── Zone split helpers ──────────────────────────────────────────────────────
+function updateZoneSplitVisibility() {
+  const section = document.getElementById('zone-split-section');
+  if (section) {
+    section.style.display = config.serviceMode === 'zone' ? '' : 'none';
+  }
+  updateZoneSplitSlider();
+}
+
+function updateZoneSplitSlider() {
+  const slider = document.getElementById('zone-split-slider');
+  if (slider) {
+    slider.min = 1;
+    slider.max = config.numFloors - 1;
+    slider.value = config.zoneSplitFloor;
+  }
+  updateZoneSplitLabel();
+}
+
+function updateZoneSplitLabel() {
+  const lbl = document.getElementById('zone-split-label');
+  if (lbl) {
+    lbl.textContent = t('zoneLowRange', { from: 1, to: config.zoneSplitFloor }) +
+      '  |  ' + t('zoneHighRange', { from: config.zoneSplitFloor + 1, to: config.numFloors });
+  }
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
+  config.zoneSplitFloor = Math.ceil(config.numFloors / 2);
+  updateZoneSplitVisibility();
   buildUI();
   document.getElementById('pause-btn').disabled = true;
   renderAlgoDescriptions();
   // Set initial speed from slider
   const v = parseInt(document.getElementById('speed-slider').value);
   currentTickMs = Math.round(TICK_MS_MAX - (v - 1) / (10 - 1) * (TICK_MS_MAX - TICK_MS_MIN));
+  // Set initial algo A label in AB panel
+  const abLabel = document.getElementById('ab-algo-a-label');
+  if (abLabel) abLabel.textContent = document.getElementById('algo-select').value;
 });

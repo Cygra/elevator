@@ -182,14 +182,24 @@
         <!-- Ctrl tab -->
         <div id="tab-ctrl" class="tab-panel" style="display:none">
           <div class="ctrl-section">
-            <div class="ctrl-title" data-i18n="ctrlAddPassenger">添加乘客</div>
+            <div class="ctrl-title" data-i18n="ctrlAddPassenger">手动添加乘客</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-bottom:4px" data-i18n="ctrlAddDesc">指定一位乘客的出发楼层和目标楼层，模拟该乘客呼叫电梯。</div>
             <div class="ctrl-row">
-              <span class="hdr-label" data-i18n="ctrlFrom">从</span>
+              <span class="hdr-label" data-i18n="ctrlFrom">出发楼层</span>
               <input type="number" id="pax-from" value="1" min="1" max="60" style="width:40px"/>
-              <span class="hdr-label" data-i18n="ctrlTo">到</span>
+              <span class="hdr-label">→</span>
+              <span class="hdr-label" data-i18n="ctrlTo">目标楼层</span>
               <input type="number" id="pax-to" value="5" min="1" max="60" style="width:40px"/>
               <button class="btn btn-accent btn-sm" id="add-pax-btn" data-i18n="ctrlAdd">添加</button>
             </div>
+          </div>
+          <div class="ctrl-section" id="zone-split-section" style="display:none">
+            <div class="ctrl-title" data-i18n="zoneSplit">分区分界层</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-bottom:4px" data-i18n="zoneSplitDesc">低区电梯服务 1F 到分界层，高区电梯服务分界层+1 到顶层。</div>
+            <div class="ctrl-row">
+              <input type="range" id="zone-split-slider" min="2" max="58" value="10" style="width:100%"/>
+            </div>
+            <div style="font-size:9px;color:var(--text-dim)" id="zone-split-label"></div>
           </div>
           <div class="ctrl-section">
             <div class="ctrl-title" data-i18n="ctrlPresets">场景预设</div>
@@ -217,16 +227,20 @@
 
         <!-- A/B tab -->
         <div id="tab-ab" class="tab-panel" style="display:none">
+          <div class="section-title" style="margin-bottom:6px" data-i18n="abCompare">A/B 算法对比</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-bottom:6px" data-i18n="abDesc">开启后，两种算法将同时接收相同的乘客请求，对比各项性能指标。</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-bottom:8px" data-i18n="abHowTo">先在顶部选择主算法 A，再在下方选择对比算法 B，然后点击顶部「A/B对比」按钮开启。</div>
           <div class="ab-header">
-            <span class="section-title" style="margin:0;border:0;padding:0" data-i18n="abCompare">A/B 对比</span>
-            <span class="tag" data-i18n="abAlgoA">算法 A</span>
+            <span class="tag" data-i18n="abAlgoA">主算法 (A)</span>
+            <span style="font-size:10px;color:var(--accent);font-weight:700" id="ab-algo-a-label">SCAN</span>
+            <span style="font-size:10px;color:var(--text-dim)">vs</span>
+            <span class="tag" data-i18n="abAlgoB">对比算法 (B)</span>
             <select id="ab-algo-select" style="font-size:11px">
               <option value="FCFS">FCFS</option>
               <option value="SCAN" selected>SCAN</option>
               <option value="LOOK">LOOK</option>
               <option value="SSTF">SSTF</option>
             </select>
-            <span class="tag" data-i18n="abAlgoB">算法 B</span>
           </div>
           <div id="ab-table-wrap"></div>
         </div>
