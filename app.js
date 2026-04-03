@@ -67,8 +67,8 @@ const I18N = {
     chartWait:'平均等待', chartTravel:'平均行程',
     floorUp:'上行呼叫', floorDown:'下行呼叫',
     elevDir1:'↑', elevDirN1:'↓', elevDir0:'●',
-    presetMorningDesc:'🌅 早高峰: 大量乘客从低层前往高层',
-    presetEveningDesc:'🌆 晚高峰: 大量乘客从高层返回低层',
+    presetMorningDesc:'🌅 早高峰: 大量乘客从1层前往各楼层',
+    presetEveningDesc:'🌆 晚高峰: 大量乘客从各楼层返回1层',
     presetLunchDesc:'🍜 午餐时间: 各层均有乘客需求',
     algoFCFSName:'先来先服务 (FCFS)', algoSCANName:'扫描算法 (SCAN)',
     algoLOOKName:'LOOK 算法', algoSSTFName:'最短寻道优先 (SSTF)',
@@ -139,8 +139,8 @@ const I18N = {
     chartWait:'Avg Wait', chartTravel:'Avg Travel',
     floorUp:'Call Up', floorDown:'Call Down',
     elevDir1:'↑', elevDirN1:'↓', elevDir0:'●',
-    presetMorningDesc:'🌅 Morning rush: passengers going up from lower floors',
-    presetEveningDesc:'🌆 Evening rush: passengers going down from upper floors',
+    presetMorningDesc:'🌅 Morning rush: passengers going up from lobby to all floors',
+    presetEveningDesc:'🌆 Evening rush: passengers going down from all floors to lobby',
     presetLunchDesc:'🍜 Lunchtime: passengers from all floors',
     algoFCFSName:'First Come First Serve (FCFS)', algoSCANName:'SCAN Algorithm',
     algoLOOKName:'LOOK Algorithm', algoSSTFName:'Shortest Seek Time First (SSTF)',
@@ -897,9 +897,21 @@ function loop(timestamp) {
     autoTick++;
     if (autoTick >= autoRate) {
       autoTick = 0;
-      const f1 = rand(1, config.numFloors);
-      let f2 = rand(1, config.numFloors);
-      while (f2 === f1) f2 = rand(1, config.numFloors);
+      let f1, f2;
+      if (Math.random() < 0.8) {
+        // 80%: passenger travels between floor 1 and their home floor
+        const homeFloor = rand(2, config.numFloors);
+        if (Math.random() < 0.5) {
+          f1 = 1; f2 = homeFloor;        // going up from lobby
+        } else {
+          f1 = homeFloor; f2 = 1;        // going down to lobby
+        }
+      } else {
+        // 20%: inter-floor travel (not involving floor 1)
+        f1 = rand(2, config.numFloors);
+        f2 = rand(2, config.numFloors);
+        while (f2 === f1) f2 = rand(2, config.numFloors);
+      }
       addPassengerMirrored(f1, f2);
     }
   }
@@ -1058,7 +1070,8 @@ function initEventListeners() {
   document.getElementById('preset-morning').addEventListener('click', () => {
     if (!sim) return;
     for (let i = 0; i < 15; i++) {
-      addPassengerMirrored(rand(1, Math.ceil(config.numFloors * 0.3)), rand(Math.ceil(config.numFloors * 0.5), config.numFloors));
+      // Morning rush: passengers go from floor 1 (lobby) to upper floors
+      addPassengerMirrored(1, rand(2, config.numFloors));
     }
     logEntry('warn', t('presetMorningDesc'));
     render();
@@ -1067,7 +1080,8 @@ function initEventListeners() {
   document.getElementById('preset-evening').addEventListener('click', () => {
     if (!sim) return;
     for (let i = 0; i < 15; i++) {
-      addPassengerMirrored(rand(Math.ceil(config.numFloors * 0.5), config.numFloors), rand(1, Math.ceil(config.numFloors * 0.3)));
+      // Evening rush: passengers go from upper floors down to floor 1 (lobby)
+      addPassengerMirrored(rand(2, config.numFloors), 1);
     }
     logEntry('warn', t('presetEveningDesc'));
     render();
