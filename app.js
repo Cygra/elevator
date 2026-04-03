@@ -48,8 +48,8 @@ const I18N = {
     logEmpty:'暂无日志',
     algoDescTitle:'算法详解',
     zoneLow:'低区', zoneHigh:'高区', zoneOdd:'奇数层', zoneEven:'偶数层',
-    zoneLowRange:'低区: {from}F - {to}F', zoneHighRange:'高区: {from}F - {to}F',
-    zoneSplit:'分区分界层', zoneSplitDesc:'低区电梯服务 1F 到分界层，高区电梯服务分界层+1 到顶层。',
+    zoneLowRange:'低区: {from}F - {to}F', zoneHighRange:'高区: 1F 及 {from}F - {to}F',
+    zoneSplit:'分区分界层', zoneSplitDesc:'低区电梯服务 1F 到分界层；高区电梯服务 1F（大厅）及分界层到顶层。',
     crowdTriggered:'🏟️ 满员涌入: 第{floor}层 {n}名乘客',
     passengerAdded:'乘客: {from}F → {to}F',
     simReset:'模拟已重置',
@@ -120,8 +120,8 @@ const I18N = {
     logEmpty:'No log entries',
     algoDescTitle:'Algorithm Details',
     zoneLow:'Low Zone', zoneHigh:'High Zone', zoneOdd:'Odd Floors', zoneEven:'Even Floors',
-    zoneLowRange:'Low: {from}F - {to}F', zoneHighRange:'High: {from}F - {to}F',
-    zoneSplit:'Zone split floor', zoneSplitDesc:'Low-zone elevators serve 1F to split floor; high-zone elevators serve split+1 to top.',
+    zoneLowRange:'Low: {from}F - {to}F', zoneHighRange:'High: 1F & {from}F - {to}F',
+    zoneSplit:'Zone split floor', zoneSplitDesc:'Low-zone elevators serve 1F to split floor; high-zone elevators serve 1F (lobby) and split floor to top.',
     crowdTriggered:'🏟️ Crowd burst: Floor {floor}, {n} passengers',
     passengerAdded:'Passenger: {from}F → {to}F',
     simReset:'Simulation reset',
@@ -268,7 +268,13 @@ class Simulation {
     if (this.serviceMode === 'normal') return true;
     if (this.serviceMode === 'zone') {
       const halfElevs = Math.ceil(this.numElevators / 2);
-      return elevId < halfElevs ? floor <= this.zoneSplitFloor : floor > this.zoneSplitFloor;
+      // Low-zone: serves 1F to split floor
+      // High-zone: serves 1F (lobby) AND split floor to top floor
+      if (elevId < halfElevs) {
+        return floor <= this.zoneSplitFloor;
+      } else {
+        return floor === 1 || floor >= this.zoneSplitFloor;
+      }
     }
     if (this.serviceMode === 'odd-even') {
       if (floor === 1) return true;
@@ -526,7 +532,7 @@ function renderBuilding() {
   callSpacer.style.cssText = 'width:16px;flex-shrink:0;';
   headerRow.appendChild(callSpacer);
   const waitSpacer = document.createElement('div');
-  waitSpacer.style.cssText = 'width:22px;flex-shrink:0;';
+  waitSpacer.style.cssText = 'width:40px;flex-shrink:0;';
   headerRow.appendChild(waitSpacer);
 
   for (let e = 0; e < numElevators; e++) {
@@ -586,6 +592,15 @@ function renderBuilding() {
     const waitDiv = document.createElement('div');
     waitDiv.className = 'floor-waiting';
     waitDiv.id = 'floor-wait-' + f;
+    // Two sub-elements for up/down counts
+    const waitUp = document.createElement('span');
+    waitUp.className = 'floor-wait-up';
+    waitUp.id = 'floor-wait-up-' + f;
+    const waitDn = document.createElement('span');
+    waitDn.className = 'floor-wait-dn';
+    waitDn.id = 'floor-wait-dn-' + f;
+    waitDiv.appendChild(waitUp);
+    waitDiv.appendChild(waitDn);
     row.appendChild(waitDiv);
 
     for (let e = 0; e < numElevators; e++) {
@@ -602,7 +617,7 @@ function renderBuilding() {
   const carsLayer = document.createElement('div');
   carsLayer.id = 'cars-layer';
   // Compute left offset from floor-label + call-btns + waiting column widths
-  const leftOffset = 30 + 16 + 22; // floor-label(30) + call-btns(16) + waiting(22)
+  const leftOffset = 30 + 16 + 40; // floor-label(30) + call-btns(16) + waiting(40)
   const topOffset = 24; // shaft header height
   // Total height of floor area = numFloors * floorH
   const floorH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--floor-h')) || 28;
@@ -636,7 +651,7 @@ function getZoneLabel(elevId) {
     if (isLow) {
       return t('zoneLowRange', { from: 1, to: config.zoneSplitFloor });
     } else {
-      return t('zoneHighRange', { from: config.zoneSplitFloor + 1, to: config.numFloors });
+      return t('zoneHighRange', { from: config.zoneSplitFloor, to: config.numFloors });
     }
   }
   if (config.serviceMode === 'odd-even') {
@@ -652,9 +667,7 @@ function onCallBtn(floor, dir) {
   else toFloor = rand(1, floor - 1);
   addPassengerMirrored(floor, toFloor);
   logEntry('info', t('passengerAdded', { from: floor, to: toFloor }));
-  const btnId = dir === 1 ? 'call-up-' + floor : 'call-dn-' + floor;
-  const btn = document.getElementById(btnId);
-  if (btn) { btn.classList.add('active'); setTimeout(() => btn.classList.remove('active'), 600); }
+  render();
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
@@ -683,11 +696,28 @@ function render() {
     if (dR) dR.style.width = doorW;
   }
 
-  const waitMap = {};
-  for (const p of sim.waiting) waitMap[p.fromFloor] = (waitMap[p.fromFloor] || 0) + 1;
+  // Split waiting passengers into up-bound and down-bound per floor
+  const waitUpMap = {};
+  const waitDnMap = {};
+  for (const p of sim.waiting) {
+    if (p.toFloor > p.fromFloor) {
+      waitUpMap[p.fromFloor] = (waitUpMap[p.fromFloor] || 0) + 1;
+    } else {
+      waitDnMap[p.fromFloor] = (waitDnMap[p.fromFloor] || 0) + 1;
+    }
+  }
   for (let f = 1; f <= config.numFloors; f++) {
-    const el = document.getElementById('floor-wait-' + f);
-    if (el) el.textContent = waitMap[f] ? waitMap[f] : '';
+    const upEl = document.getElementById('floor-wait-up-' + f);
+    const dnEl = document.getElementById('floor-wait-dn-' + f);
+    const upCount = waitUpMap[f] || 0;
+    const dnCount = waitDnMap[f] || 0;
+    if (upEl) upEl.textContent = upCount ? '▲' + upCount : '';
+    if (dnEl) dnEl.textContent = dnCount ? '▼' + dnCount : '';
+    // Light up call buttons when passengers waiting in that direction
+    const btnUp = document.getElementById('call-up-' + f);
+    const btnDn = document.getElementById('call-dn-' + f);
+    if (btnUp) btnUp.classList.toggle('active', upCount > 0);
+    if (btnDn) btnDn.classList.toggle('active', dnCount > 0);
   }
 
   updateStats();
@@ -984,6 +1014,7 @@ function initEventListeners() {
     const isDark = html.dataset.theme === 'dark';
     html.dataset.theme = isDark ? 'light' : 'dark';
     e.target.textContent = isDark ? '☀️' : '🌙';
+    saveSettings();
   });
 
   document.getElementById('lang-btn').addEventListener('click', () => {
@@ -994,6 +1025,7 @@ function initEventListeners() {
     // Rebuild building to update zone labels and titles
     renderBuilding();
     render();
+    saveSettings();
   });
 
   // Tab switching
@@ -1019,6 +1051,7 @@ function initEventListeners() {
     if (from === to) return;
     addPassengerMirrored(from, to);
     logEntry('info', t('passengerAdded', { from, to }));
+    render();
   });
 
   // Presets
@@ -1028,6 +1061,7 @@ function initEventListeners() {
       addPassengerMirrored(rand(1, Math.ceil(config.numFloors * 0.3)), rand(Math.ceil(config.numFloors * 0.5), config.numFloors));
     }
     logEntry('warn', t('presetMorningDesc'));
+    render();
   });
 
   document.getElementById('preset-evening').addEventListener('click', () => {
@@ -1036,6 +1070,7 @@ function initEventListeners() {
       addPassengerMirrored(rand(Math.ceil(config.numFloors * 0.5), config.numFloors), rand(1, Math.ceil(config.numFloors * 0.3)));
     }
     logEntry('warn', t('presetEveningDesc'));
+    render();
   });
 
   document.getElementById('preset-lunch').addEventListener('click', () => {
@@ -1047,6 +1082,7 @@ function initEventListeners() {
       addPassengerMirrored(f1, f2);
     }
     logEntry('info', t('presetLunchDesc'));
+    render();
   });
 
   document.getElementById('preset-crowd').addEventListener('click', () => {
@@ -1061,6 +1097,7 @@ function initEventListeners() {
       }
     }
     logEntry('warn', t('crowdTriggered', { floor: burstFloor, n: 25 }));
+    render();
   });
 
   document.getElementById('auto-rate-slider').addEventListener('input', e => {
@@ -1099,12 +1136,42 @@ function updateZoneSplitLabel() {
   const lbl = document.getElementById('zone-split-label');
   if (lbl) {
     lbl.textContent = t('zoneLowRange', { from: 1, to: config.zoneSplitFloor }) +
-      '  |  ' + t('zoneHighRange', { from: config.zoneSplitFloor + 1, to: config.numFloors });
+      '  |  ' + t('zoneHighRange', { from: config.zoneSplitFloor, to: config.numFloors });
   }
+}
+
+// ── Settings persistence (localStorage) ────────────────────────────────────
+const STORAGE_KEY = 'elevator-sim-settings';
+function saveSettings() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      theme: document.documentElement.dataset.theme,
+      lang: currentLang,
+    }));
+  } catch (_) { /* quota / private-mode */ }
+}
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s.theme) {
+      document.documentElement.dataset.theme = s.theme;
+      const btn = document.getElementById('theme-btn');
+      if (btn) btn.textContent = s.theme === 'dark' ? '🌙' : '☀️';
+    }
+    if (s.lang && (s.lang === 'zh' || s.lang === 'en')) {
+      currentLang = s.lang;
+      document.getElementById('lang-btn').textContent = currentLang === 'zh' ? 'EN' : '中文';
+      document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+      applyI18n();
+    }
+  } catch (_) { /* corrupt data */ }
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
   initEventListeners();
   config.zoneSplitFloor = Math.ceil(config.numFloors / 2);
   updateZoneSplitVisibility();
