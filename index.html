@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>电梯调度算法可视化模拟器 | Elevator Scheduling Algorithm Visualizer</title>
+<meta name="description" content="交互式电梯调度算法可视化模拟器。支持SCAN、LOOK、FCFS、SSTF算法对比，分区模式，单双层模式，满客模拟，实时统计，A/B测试。Interactive elevator scheduling algorithm visualizer with real-time statistics."/>
+<meta name="keywords" content="电梯调度,电梯算法,SCAN,LOOK,FCFS,SSTF,电梯模拟器,调度算法可视化,分区电梯,elevator scheduling,elevator algorithm,elevator simulator,visualization,algorithm comparison"/>
+<meta name="author" content="Cygra"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="https://cygra.github.io/elevator/"/>
+<meta name="theme-color" content="#080818"/>
+
+<!-- Open Graph -->
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://cygra.github.io/elevator/"/>
+<meta property="og:title" content="电梯调度算法可视化模拟器 | Elevator Scheduling Visualizer"/>
+<meta property="og:description" content="交互式电梯调度算法可视化模拟器，支持多种算法、分区模式、实时统计、A/B对比"/>
+<meta property="og:locale" content="zh_CN"/>
+<meta property="og:locale:alternate" content="en_US"/>
+<meta property="og:site_name" content="Elevator Scheduling Visualizer"/>
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="电梯调度算法可视化模拟器 | Elevator Scheduling Visualizer"/>
+<meta name="twitter:description" content="交互式电梯调度算法可视化模拟器，支持SCAN/LOOK/FCFS/SSTF，A/B对比模式"/>
+
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "电梯调度算法可视化模拟器",
+  "alternateName": "Elevator Scheduling Algorithm Visualizer",
+  "description": "Interactive elevator scheduling algorithm visualizer supporting SCAN, LOOK, FCFS, SSTF, zone mode, A/B testing, and real-time statistics.",
+  "url": "https://cygra.github.io/elevator/",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Any",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Cygra", "url": "https://github.com/Cygra" },
+  "keywords": "elevator scheduling, algorithm visualization, SCAN, LOOK, FCFS, SSTF"
+}
+</script>
+
+<!-- Google Fonts: Noto Sans SC for Chinese + Latin support -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet"/>
+
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ HEADER ═══════════════════════════════════════════════════════════ -->
+  <header id="app-header">
+    <div class="hdr-title">
+      <span>⬆️</span>
+      <span data-i18n="title">电梯调度算法模拟器</span>
+    </div>
+    <div class="hdr-sep"></div>
+
+    <div class="hdr-group">
+      <span class="hdr-label" data-i18n="labelAlgo">算法</span>
+      <select id="algo-select">
+        <option value="SCAN" data-i18n="algoSCAN">扫描算法 (SCAN)</option>
+        <option value="FCFS" data-i18n="algoFCFS">先来先服务 (FCFS)</option>
+        <option value="LOOK" data-i18n="algoLOOK">LOOK 算法</option>
+        <option value="SSTF" data-i18n="algoSSTF">最短寻道优先 (SSTF)</option>
+      </select>
+    </div>
+
+    <div class="hdr-sep"></div>
+    <div class="hdr-group">
+      <span class="hdr-label" data-i18n="labelMode">模式</span>
+      <select id="service-mode-select">
+        <option value="normal" data-i18n="modeNormal">普通</option>
+        <option value="zone" data-i18n="modeZone">分区</option>
+        <option value="odd-even" data-i18n="modeOddEven">奇偶层</option>
+      </select>
+    </div>
+
+    <div class="hdr-sep"></div>
+    <div class="hdr-group">
+      <span class="hdr-label" data-i18n="labelFloors">楼层</span>
+      <input type="number" id="floors-input" value="20" min="2" max="60"/>
+      <span class="hdr-label" data-i18n="labelElevs">电梯</span>
+      <input type="number" id="elevs-input" value="4" min="1" max="6"/>
+      <button class="btn btn-sm" id="apply-btn" data-i18n="labelApply">应用</button>
+    </div>
+
+    <div class="hdr-sep"></div>
+    <div class="hdr-group">
+      <span class="hdr-label" data-i18n="labelSpeed">速度</span>
+      <input type="range" id="speed-slider" min="1" max="10" value="5"/>
+    </div>
+
+    <div class="hdr-sep"></div>
+    <button class="btn btn-sm" id="auto-btn" data-i18n="labelAuto">自动</button>
+    <button class="btn btn-sm" id="ab-btn" data-i18n="labelAB">A/B对比</button>
+
+    <div class="hdr-sep"></div>
+    <button class="btn btn-green btn-sm" id="start-btn" data-i18n="btnStart">开始</button>
+    <button class="btn btn-sm" id="pause-btn" disabled data-i18n="btnPause">暂停</button>
+    <button class="btn btn-sm" id="reset-btn" data-i18n="btnReset">重置</button>
+
+    <div class="hdr-sep"></div>
+    <span id="tick-display">T:0.0s</span>
+    <span id="status-chip" data-i18n="statusIdle">就绪</span>
+
+    <div class="spacer"></div>
+    <button class="btn btn-icon" id="theme-btn" title="Toggle theme">🌙</button>
+    <button class="btn btn-sm" id="lang-btn">EN</button>
+  </header>
+
+  <!-- ═══ BODY ═════════════════════════════════════════════════════════════ -->
+  <div id="app-body">
+
+    <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+    <aside id="sidebar">
+      <div id="tab-bar">
+        <button class="tab-btn active" data-tab="stats">📊</button>
+        <button class="tab-btn" data-tab="elevs">🛗</button>
+        <button class="tab-btn" data-tab="ctrl">⚙️</button>
+        <button class="tab-btn" data-tab="algo">📖</button>
+        <button class="tab-btn" data-tab="ab">🆚</button>
+        <button class="tab-btn" data-tab="log">📋</button>
+      </div>
+      <div id="tab-content">
+
+        <!-- Stats tab -->
+        <div id="tab-stats" class="tab-panel">
+          <div class="stat-grid">
+            <div class="stat-item green">
+              <div class="stat-value" id="stat-completed">0</div>
+              <div class="stat-label" data-i18n="statCompleted">已完成</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-waiting">0</div>
+              <div class="stat-label" data-i18n="statWaiting">等待中</div>
+            </div>
+            <div class="stat-item yellow">
+              <div class="stat-value" id="stat-avg-wait">-</div>
+              <div class="stat-label" data-i18n="statAvgWait">平均等待(s)</div>
+            </div>
+            <div class="stat-item orange">
+              <div class="stat-value" id="stat-avg-travel">-</div>
+              <div class="stat-label" data-i18n="statAvgTravel">平均行程(s)</div>
+            </div>
+            <div class="stat-item red">
+              <div class="stat-value" id="stat-max-wait">-</div>
+              <div class="stat-label" data-i18n="statMaxWait">最大等待(s)</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-throughput">0</div>
+              <div class="stat-label" data-i18n="statThroughput">吞吐/分钟</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-empty-rate">-</div>
+              <div class="stat-label" data-i18n="statEmptyRate">空载率%</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-full-rate">-</div>
+              <div class="stat-label" data-i18n="statFullRate">满载率%</div>
+            </div>
+            <div class="stat-item red">
+              <div class="stat-value" id="stat-floors">0</div>
+              <div class="stat-label" data-i18n="statFloors">总楼层移动</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-energy">0.000</div>
+              <div class="stat-label" data-i18n="statEnergy">电耗(kWh)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Elevs tab -->
+        <div id="tab-elevs" class="tab-panel" style="display:none">
+          <div id="elevs-panel"></div>
+        </div>
+
+        <!-- Ctrl tab -->
+        <div id="tab-ctrl" class="tab-panel" style="display:none">
+          <div class="ctrl-section">
+            <div class="ctrl-title" data-i18n="ctrlAddPassenger">手动添加乘客</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-bottom:4px" data-i18n="ctrlAddDesc">指定一位乘客的出发楼层和目标楼层，模拟该乘客呼叫电梯。</div>
+            <div class="ctrl-row">
+              <span class="hdr-label" data-i18n="ctrlFrom">出发楼层</span>
+              <input type="number" id="pax-from" value="1" min="1" max="60" style="width:40px"/>
+              <span class="hdr-label">→</span>
+              <span class="hdr-label" data-i18n="ctrlTo">目标楼层</span>
+              <input type="number" id="pax-to" value="5" min="1" max="60" style="width:40px"/>
+              <button class="btn btn-accent btn-sm" id="add-pax-btn" data-i18n="ctrlAdd">添加</button>
+            </div>
+          </div>
+          <div class="ctrl-section" id="zone-split-section" style="display:none">
+            <div class="ctrl-title" data-i18n="zoneSplit">分区分界层</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-bottom:4px" data-i18n="zoneSplitDesc">低区电梯服务 1F 到分界层；高区电梯服务 1F（大厅）及分界层到顶层。分界层两区共享，方便换乘。</div>
+            <div class="ctrl-row">
+              <input type="range" id="zone-split-slider" min="2" max="58" value="10" style="width:100%"/>
+            </div>
+            <div style="font-size:9px;color:var(--text-dim)" id="zone-split-label"></div>
+          </div>
+          <div class="ctrl-section">
+            <div class="ctrl-title" data-i18n="ctrlPresets">场景预设</div>
+            <div class="preset-grid">
+              <button class="btn btn-sm" id="preset-morning" data-i18n="ctrlMorningRush">🌅 早高峰</button>
+              <button class="btn btn-sm" id="preset-evening" data-i18n="ctrlEveningRush">🌆 晚高峰</button>
+              <button class="btn btn-sm" id="preset-lunch" data-i18n="ctrlLunchtime">🍜 午餐时间</button>
+              <button class="btn btn-warn btn-sm" id="preset-crowd" data-i18n="ctrlCrowd">🏟️ 满员涌入</button>
+            </div>
+          </div>
+          <div class="ctrl-section">
+            <div class="ctrl-title" data-i18n="ctrlAutoRate">自动生成频率</div>
+            <div class="ctrl-row">
+              <input type="range" id="auto-rate-slider" min="1" max="20" value="5" style="width:100%"/>
+            </div>
+            <div style="font-size:9px;color:var(--text-dim)" id="auto-rate-label">5 ticks/pax</div>
+          </div>
+        </div>
+
+        <!-- Algo tab -->
+        <div id="tab-algo" class="tab-panel" style="display:none">
+          <div class="section-title" data-i18n="algoDescTitle">算法详解</div>
+          <div id="algo-desc-container"></div>
+        </div>
+
+        <!-- A/B tab -->
+        <div id="tab-ab" class="tab-panel" style="display:none">
+          <div class="section-title" style="margin-bottom:6px" data-i18n="abCompare">A/B 算法对比</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-bottom:6px" data-i18n="abDesc">开启后，两种算法将同时接收相同的乘客请求，对比各项性能指标。</div>
+          <div style="font-size:9px;color:var(--text-dim);margin-bottom:8px" data-i18n="abHowTo">先在顶部选择主算法 A，再在下方选择对比算法 B，然后点击顶部「A/B对比」按钮开启。</div>
+          <div class="ab-header">
+            <span class="tag" data-i18n="abAlgoA">主算法 (A)</span>
+            <span style="font-size:10px;color:var(--accent);font-weight:700" id="ab-algo-a-label">SCAN</span>
+            <span style="font-size:10px;color:var(--text-dim)">vs</span>
+            <span class="tag" data-i18n="abAlgoB">对比算法 (B)</span>
+            <select id="ab-algo-select" style="font-size:11px">
+              <option value="FCFS">FCFS</option>
+              <option value="SCAN" selected>SCAN</option>
+              <option value="LOOK">LOOK</option>
+              <option value="SSTF">SSTF</option>
+            </select>
+          </div>
+          <div id="ab-table-wrap"></div>
+        </div>
+
+        <!-- Log tab -->
+        <div id="tab-log" class="tab-panel" style="display:none">
+          <div id="log-list">
+            <div class="log-entry info" data-i18n="logEmpty">暂无日志</div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- ── Main area ────────────────────────────────────────────────────── -->
+    <div id="main-area">
+      <div id="building-wrap">
+        <div id="building"></div>
+      </div>
+      <div id="chart-area">
+        <canvas id="perf-canvas"></canvas>
+        <div class="chart-legend">
+          <div class="chart-legend-item">
+            <div class="legend-dot" style="background:rgba(79,195,247,.8)"></div>
+            <span data-i18n="chartWait">平均等待</span>
+          </div>
+          <div class="chart-legend-item">
+            <div class="legend-dot" style="background:rgba(255,145,0,.8)"></div>
+            <span data-i18n="chartTravel">平均行程</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
